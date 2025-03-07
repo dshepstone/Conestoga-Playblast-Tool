@@ -1,159 +1,29 @@
-I want the user to be able to select the shelf for the buttons to be placed into for the playblast tool, this should be done with an optional dropdown selection menu in the installer window. Place a title in the installer window of "Conestoga Playblast tool" and use the icons in the folder as the button icons. Do not create a separate shelf called GameDev, rewrite the menu script if needed to fix this. Also, there seems to be an issue loading the Conestoga playblast tool UI when the button is executed based on this error that Maya produced: 
+This file is not giving the user the ability to reinstall the tool, if the tool detects that it is already installed.
 
-import maya.app.general.executeDroppedPythonFile as myTempEDPF
+Have the tool reinstall the scripts if it detects that they are already installed.
 
-myTempEDPF.executeDroppedPythonFile("F:/Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1/drag_and_drop_launcher.py", "")
+The shelf selection process: The user is given a drop down menu to select the shelf for the installation of the tool shelf buttons and the icons that go with these buttons, but it is not installing those buttons on the shelf. It is currently installing a new shelf called GameDev and adding the buttons to this shelf, ignoring the user input of where to place the buttons. This needs to be fixed in the launcher code.
 
-del myTempEDPF
-
-Maya scripts directory: F:\Documents\maya\scripts
-
-Maya plugins directory: F:\Documents\maya\plug-ins
-
-Source directory: C:\Program Files\Autodesk
-
-Found 13 items in source directory
-
-  1. AdODIS
-
-  2. AdskIdentityManager
-
-  3. Arnold
-
-  4. AutoCAD 2023
-
-  5. Autodesk AdSSO
-
-  6. Bifrost
-
-  7. Genuine Service
-
-  8. LookdevX
-
-  9. Maya2022
-
-  10. Maya2023
-
-  11. Maya2024
-
-  12. Maya2025
-
-  13. MayaUSD
-
-Created main module at F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py
-
-userSetup.py already has Conestoga Playblast setup
-
-Added F:\Documents\maya\scripts\conestoga_playblast to sys.path
-
-Imported presets module
-
-Imported utils module
-
-Imported menu module
-
-Using main UI icon: F:\Documents\maya\scripts\Conestoga playblast plugin\Conestoga Playblst Tool v2_0_0 -1\conestoga_playblast_icon.png
-
-Using quick playblast icon: playblastOptions.png
-
-# Warning: Pixmap file playblastOptions.png not found, using default.
-
-Initialized Conestoga Playblast Tool v2.0.0
-
-Successfully initialized menu
-
-# Warning: Could not launch tool: unexpected indent (conestoga_playblast_ui.py, line 2099)
-
-# Traceback (most recent call last):
-
-# #   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\drag_and_drop_launcher.py", line 470, in onMayaDroppedPythonFile
-
-    conestoga_playblast.show_ui()
-
-# #   File "F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py", line 13, in show_ui
-
-    import conestoga_playblast_ui
-
-#   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\conestoga_playblast_ui.py", line 2099
-
-#     self.resolutionComboBox.setCurrentText(DEFAULT_RESOLUTION)
-
-# IndentationError: unexpected indent
-
-# Warning: Alternative launch attempt failed: unexpected indent (conestoga_playblast_ui.py, line 2099)
-
-# Traceback (most recent call last):
-
-# #   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\drag_and_drop_launcher.py", line 470, in onMayaDroppedPythonFile
-
-    conestoga_playblast.show_ui()
-
-# #   File "F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py", line 13, in show_ui
-
-    import conestoga_playblast_ui
-
-#   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\conestoga_playblast_ui.py", line 2099
-
-#     self.resolutionComboBox.setCurrentText(DEFAULT_RESOLUTION)
-
-# IndentationError: unexpected indent
-
-# # 
-
-# During handling of the above exception, another exception occurred:
-
-# Traceback (most recent call last):
-
-# #   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\drag_and_drop_launcher.py", line 477, in onMayaDroppedPythonFile
-
-    import conestoga_playblast_ui
-
-#   File "F:\Documents/maya/scripts/Conestoga playblast plugin/Conestoga Playblst Tool v2_0_0 -1\conestoga_playblast_ui.py", line 2099
-
-#     self.resolutionComboBox.setCurrentText(DEFAULT_RESOLUTION)
-
-# IndentationError: unexpected indent
+When the shelf buttons are executed, they are giving the following errors in Maya:
 
 import conestoga_playblast; conestoga_playblast.show_ui()
 
-# Error: IndentationError: file F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py line 13: unexpected indent
+# Error: module 'conestoga_playblast' has no attribute 'show_ui'
+
+# # Traceback (most recent call last):
+
+# #   File "<maya console>", line 1, in <module>
+
+# # AttributeError: module 'conestoga_playblast' has no attribute 'show_ui'
 
 import conestoga_playblast; conestoga_playblast.create_playblast()
 
-# Error: IndentationError: file F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py line 22: unexpected indent
+# Error: module 'conestoga_playblast' has no attribute 'create_playblast'
 
-import conestoga_playblast; conestoga_playblast.show_ui()
+# # Traceback (most recent call last):
 
-# Error: IndentationError: file F:\Documents\maya\scripts\conestoga_playblast\conestoga_playblast.py line 13: unexpected indent
+# #   File "<maya console>", line 1, in <module>
 
+# # AttributeError: module 'conestoga_playblast' has no attribute 'create_playblast'
 
-
-Below is an approach that addresses both issues:
-
-Instead of automatically creating a new “GameDev” shelf, modify the menu‐integration code so that the installer window presents a dropdown list of all existing shelves. When the user selects one and clicks “Install,” the installer will call the revised menu function to place the buttons into that shelf. For example, you can add this installer UI (in your drag‐and‐drop launcher) to list shelves and then pass the chosen shelf name to a revised create_shelf_buttons() function:
-  import maya.cmds as cmds
-
-  def get_available_shelves():     # List all shelf layouts in the current Maya session     return cmds.lsUI(type="shelfLayout")
-
-  def installer_ui():     if cmds.window("installerWindow", exists=True):       cmds.deleteUI("installerWindow")     window = cmds.window("installerWindow", title="Conestoga Playblast tool", widthHeight=(300, 150))     cmds.columnLayout(adjustableColumn=True)     cmds.text(label="Select the shelf to place the playblast buttons:")     shelf_dropdown = cmds.optionMenu("shelfDropdown", label="Shelf:")     for shelf in get_available_shelves():       cmds.menuItem(label=shelf)     cmds.button(label="Install", command=lambda *args: install_buttons(cmds.optionMenu(shelf_dropdown, query=True, value=True)))     cmds.showWindow(window)
-
-  def install_buttons(selected_shelf):     import conestoga_playblast_menu as menu     menu.create_shelf_buttons(selected_shelf)     cmds.confirmDialog(title="Installation Complete", message="Playblast buttons installed on shelf: " + selected_shelf, button=["OK"])
-
-  # Call installer_ui() during installation   installer_ui()
-
-In your conestoga_playblast_menu.py file, rewrite the shelf button creation function so that it uses the passed shelf name rather than creating a new shelf. For example:
-  import os   import maya.cmds as cmds
-
-  def create_shelf_buttons(selected_shelf):     """Create shelf buttons for the playblast tool on the user-selected shelf."""     if not cmds.shelfLayout(selected_shelf, exists=True):       cmds.warning("Shelf '{}' does not exist. Please create it manually.".format(selected_shelf))       return          # Main UI button     main_button = "ConestoPlayblastButton"     if cmds.shelfButton(main_button, exists=True):       cmds.deleteUI(main_button)          # Use the icon files from your folder – adjust the paths as needed     main_icon = os.path.join(os.path.dirname(file), "conestoga_playblast_icon.png")     cmds.shelfButton(       main_button,       parent=selected_shelf,       label="Playblast",       image=main_icon,       command="import conestoga_playblast; conestoga_playblast.show_ui()",       annotation="Conestoga Playblast Tool"     )          # Quick playblast button     quick_button = "ConestoQuickPlayblastButton"     if cmds.shelfButton(quick_button, exists=True):       cmds.deleteUI(quick_button)     quick_icon = os.path.join(os.path.dirname(file), "playblastOptions.png")     cmds.shelfButton(       quick_button,       parent=selected_shelf,       label="Quick Playblast",       image=quick_icon,       command="import conestoga_playblast; conestoga_playblast.create_playblast()",       annotation="Create a playblast with default settings"     )
-
-This version (inspired by 
-) no longer creates its own shelf—it simply uses the shelf the user selected.
-
-The second issue – the IndentationError in your conestoga_playblast_ui.py file (line 2099) – means that one or more lines in that file have extra or incorrect indentation. Open that file in a Python‐aware editor and check around line 2099. For instance, if you see a line like:
-       self.resolutionComboBox.setCurrentText(DEFAULT_RESOLUTION)
-
-make sure it’s indented consistently with the rest of its block. Remove any extra spaces so that its indentation matches its surrounding code block. (A similar fix is needed for the errors in conestoga_playblast.py.) These errors usually occur when a block’s indentation is accidentally shifted; ensuring that all code uses the same number of spaces (or tabs) consistently should resolve the issue.
-
-By updating both the installer UI (to allow shelf selection and use your icon files) and correcting the indentation errors in your UI and main modules, the playblast tool should load correctly when the shelf button is pressed.
-
-This revised approach should fulfill your requirements and eliminate the IndentationError that was preventing the UI from launching.
+Fix these errors in the code of the appropriate script to launch the tool. Use the scripts that are listed in this project.
