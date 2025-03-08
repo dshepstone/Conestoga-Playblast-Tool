@@ -564,26 +564,26 @@ def show_in_viewer(file_path):
 # UI FUNCTIONS
 # ===========================================================================
 
-def show_ui():
-    """Show the main playblast UI."""
-    try:
-        # Import the UI module
-        import conestoga_playblast_ui
+# def show_ui():
+#     """Show the main playblast UI."""
+#     try:
+#         # Import the UI module (change to new filename)
+#         import conestoga_playblast_gui as ui_module
         
-        # Reset any existing shot mask
-        utils.remove_shot_mask()
+#         # Reset any existing shot mask
+#         utils.remove_shot_mask()
         
-        # Initialize and show the dialog
-        dialog = conestoga_playblast_ui.show_playblast_dialog()
+#         # Initialize and show the dialog
+#         dialog = ui_module.show_playblast_dialog()
         
-        # Return the dialog instance
-        return dialog
-    except Exception as e:
-        import maya.cmds as cmds
-        cmds.warning(f"Error showing Conestoga Playblast UI: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
+#         # Return the dialog instance
+#         return dialog
+#     except Exception as e:
+#         import maya.cmds as cmds
+#         cmds.warning(f"Error showing Conestoga Playblast UI: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return None
    
 def main():
     """Main function when run as a script."""
@@ -614,7 +614,19 @@ def load_plugin():
     except Exception as e:
         cmds.warning(f"Failed to load plugin {plugin_name}: {str(e)}")
         return False
+    
+def show_ui():
+    """
+    Show the Conestoga Playblast UI.
 
+    This function imports the GUI module (conestoga_playblast_ui.py) and calls its
+    function to display the playblast dialog.
+    """
+    import conestoga_playblast_ui
+    return conestoga_playblast_ui.show_playblast_dialog()
+
+# For backwards compatibility, alias show_ui as show_playblast
+show_playblast = show_ui
 # ===========================================================================
 # ENTRY POINT
 # ===========================================================================
