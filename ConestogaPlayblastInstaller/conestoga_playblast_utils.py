@@ -12,6 +12,7 @@ import platform
 import tempfile
 import shutil
 import re
+import maya.cmds as cmds
 
 # Add script directory to path if needed
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +20,8 @@ if script_dir not in sys.path:
     sys.path.append(script_dir)
 
 import conestoga_playblast_presets as presets
-import conestoga_playblast_utils as utils
+# Removed circular self-import:
+# import conestoga_playblast_utils as utils
 
 # ===========================================================================
 # INTEGRATION UTILITIES
@@ -102,7 +104,7 @@ def create_gif_from_playblast(playblast_path, output_dir=None, width=None, fps=1
         return None
     
     # Get ffmpeg path
-    ffmpeg_path = utils.get_ffmpeg_path()
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path:
         cmds.warning("ffmpeg not available. Cannot create GIF.")
         return None
@@ -171,7 +173,7 @@ def export_playblast_frames(playblast_path, output_dir=None, format="png"):
         return None
     
     # Get ffmpeg path
-    ffmpeg_path = utils.get_ffmpeg_path()
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path:
         cmds.warning("ffmpeg not available. Cannot extract frames.")
         return None
@@ -220,7 +222,7 @@ def compare_playblasts(playblast_a, playblast_b, output_dir=None):
         return None
     
     # Get ffmpeg path
-    ffmpeg_path = utils.get_ffmpeg_path()
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path:
         cmds.warning("ffmpeg not available. Cannot create comparison.")
         return None
@@ -298,8 +300,8 @@ def generate_playblast_report(playblast_path, report_dir=None, include_screensho
     
     # Generate screenshot if required
     screenshot_path = None
-    if include_screenshot and utils.is_ffmpeg_available():
-        ffmpeg_path = utils.get_ffmpeg_path()
+    if include_screenshot and is_ffmpeg_available():
+        ffmpeg_path = get_ffmpeg_path()
         screenshot_path = os.path.join(report_dir, f"{base_name}_screenshot.jpg")
         try:
             subprocess.run([
@@ -398,7 +400,7 @@ def create_playblast_thumbnail(playblast_path, output_dir=None, width=320):
         return None
     
     # Get ffmpeg path
-    ffmpeg_path = utils.get_ffmpeg_path()
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path:
         cmds.warning("ffmpeg not available. Cannot create thumbnail.")
         return None
@@ -449,7 +451,7 @@ def prepare_for_social_media(playblast_path, platform="all", output_dir=None):
         return None
     
     # Get ffmpeg path
-    ffmpeg_path = utils.get_ffmpeg_path()
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path:
         cmds.warning("ffmpeg not available. Cannot prepare for social media.")
         return None
@@ -508,12 +510,6 @@ def prepare_for_social_media(playblast_path, platform="all", output_dir=None):
         settings = platform_settings[platform_name]
         output_path = os.path.join(output_dir, f"{base_name}_{platform_name}.mp4")
         
-        # Get aspect ratio values
-        aspect_ratio = settings["aspect_ratio"]
-        ar_parts = aspect_ratio.split(":")
-        ar_width = int(ar_parts[0])
-        ar_height = int(ar_parts[1])
-        
         # Build ffmpeg filter for this platform
         filter_complex = f"[0:v]scale={settings['max_width']}:{settings['max_height']}:force_original_aspect_ratio=decrease,pad={settings['max_width']}:{settings['max_height']}:(ow-iw)/2:(oh-ih)/2"
         
@@ -527,7 +523,7 @@ def prepare_for_social_media(playblast_path, platform="all", output_dir=None):
                 "-crf", "18",
                 "-c:a", "aac",
                 "-b:a", settings["audio_bitrate"],
-                "-movflags", "+faststart",  # Optimized for streaming
+                "-movflags", "+faststart",
                 output_path
             ], check=True)
             
@@ -556,7 +552,7 @@ def export_camera_path_for_overlay(camera, start_frame, end_frame, output_dir=No
         return None
     
     # Get camera shape node
-    camera_shape = utils.get_camera_shape(camera)
+    camera_shape = get_camera_shape(camera)
     if not camera_shape:
         return None
     
@@ -596,11 +592,10 @@ def export_camera_path_for_overlay(camera, start_frame, end_frame, output_dir=No
         json.dump(camera_data, f, indent=2)
     
     return output_path
+
 def remove_shot_mask():
     """Remove the shot mask if it exists."""
     import maya.cmds as cmds
-    
-    # Look for nodes with the mask prefix
     from conestoga_playblast_presets import MASK_PREFIX
     
     # Find all shot mask nodes
@@ -652,13 +647,12 @@ def get_ffmpeg_path():
     
     # If not set, try some common locations
     if not path or not os.path.exists(path):
-        # Common locations by platform
         if platform.system() == "Windows":
             common_paths = [
                 os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "ffmpeg", "bin", "ffmpeg.exe"),
                 os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "ffmpeg", "bin", "ffmpeg.exe")
             ]
-        elif platform.system() == "Darwin":  # macOS
+        elif platform.system() == "Darwin":
             common_paths = [
                 "/usr/local/bin/ffmpeg",
                 "/opt/homebrew/bin/ffmpeg"
@@ -669,7 +663,6 @@ def get_ffmpeg_path():
                 "/usr/local/bin/ffmpeg"
             ]
             
-        # Check if any of the common paths exist
         for common_path in common_paths:
             if os.path.exists(common_path):
                 path = common_path
@@ -683,7 +676,6 @@ def is_ffmpeg_available():
     if not ffmpeg_path or not os.path.exists(ffmpeg_path):
         return False
         
-    # Try to run ffmpeg to check if it works
     try:
         subprocess.run([ffmpeg_path, "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return True
@@ -708,33 +700,272 @@ def get_camera_shape(camera):
 
 def get_valid_model_panel():
     """Get a valid model panel that is visible."""
-    # Try to get the focused panel first
     panel = cmds.getPanel(withFocus=True)
-    
-    # Check if it's a model panel
     if cmds.getPanel(typeOf=panel) == "modelPanel":
         return panel
-        
-    # Try to find any model panel
     model_panels = cmds.getPanel(type="modelPanel")
     for panel in model_panels:
         if cmds.modelPanel(panel, query=True, visible=True):
             return panel
-    
     return None
 
 def toggle_shot_mask():
     """Toggle the shot mask on/off."""
-    # Check if mask exists
     from conestoga_playblast_presets import MASK_PREFIX
     mask_nodes = cmds.ls(MASK_PREFIX + "*", type="transform")
     
     if mask_nodes:
-        # Mask exists, remove it
         remove_shot_mask()
         return False
     else:
-        # Mask doesn't exist, create it
         import conestoga_playblast
         conestoga_playblast.show_ui()
         return True
+
+def create_shot_mask(camera, user_name, scene_name=None, text_color=None):
+    """Create a shot mask for the given camera."""
+    import maya.cmds as cmds
+    from conestoga_playblast_presets import MASK_PREFIX
+    
+    if text_color is None:
+        text_color = (1.0, 1.0, 1.0)
+    
+    if scene_name is None:
+        scene_path = cmds.file(query=True, sceneName=True) or "untitled"
+        scene_name = os.path.basename(scene_path).split('.')[0]
+    
+    mask_transform = cmds.createNode("transform", name=f"{MASK_PREFIX}transform")
+    
+    mask_material = cmds.createNode("lambert", name=f"{MASK_PREFIX}Material")
+    cmds.setAttr(f"{mask_material}.color", 0.15, 0.15, 0.15, type="double3")
+    cmds.setAttr(f"{mask_material}.transparency", 0, 0, 0, type="double3")
+    
+    text_material = cmds.createNode("lambert", name=f"{MASK_PREFIX}TextMaterial")
+    cmds.setAttr(f"{text_material}.color", text_color[0], text_color[1], text_color[2], type="double3")
+    cmds.setAttr(f"{text_material}.transparency", 0, 0, 0, type="double3")
+    
+    top_bar = cmds.polyPlane(name=f"{MASK_PREFIX}TopBar", width=1, height=0.1, subdivisionsX=1, subdivisionsY=1)[0]
+    bottom_bar = cmds.polyPlane(name=f"{MASK_PREFIX}BottomBar", width=1, height=0.1, subdivisionsX=1, subdivisionsY=1)[0]
+    
+    cmds.setAttr(f"{top_bar}.translateY", 0.5)
+    cmds.setAttr(f"{bottom_bar}.translateY", -0.5)
+    
+    cmds.parent(top_bar, mask_transform)
+    cmds.parent(bottom_bar, mask_transform)
+    
+    cmds.select(top_bar, bottom_bar)
+    cmds.hyperShade(assign=mask_material)
+    
+    camera_shape = get_camera_shape(camera)
+    if camera_shape:
+        cmds.parentConstraint(camera, mask_transform, maintainOffset=False)
+        cmds.setAttr(f"{mask_transform}.translateZ", -1.0)
+        mask_scale = 0.25
+        cmds.setAttr(f"{mask_transform}.scale", mask_scale, mask_scale, mask_scale, type="double3")
+    
+    cmds.addAttr(mask_transform, longName="maskScale", attributeType="float", defaultValue=0.25)
+    cmds.setAttr(f"{mask_transform}.maskScale", edit=True, keyable=True)
+    
+    cmds.addAttr(mask_transform, longName="opacity", attributeType="float", defaultValue=1.0)
+    cmds.setAttr(f"{mask_transform}.opacity", edit=True, keyable=True)
+    
+    mask_data = {
+        "transform": mask_transform,
+        "material": mask_material,
+        "text_material": text_material,
+        "top_bar": top_bar,
+        "bottom_bar": bottom_bar,
+        "camera": camera
+    }
+    
+    return mask_data
+
+def update_shot_mask_scale(scale):
+    """Update the scale of the shot mask."""
+    import maya.cmds as cmds
+    from conestoga_playblast_presets import MASK_PREFIX
+    mask_transform = cmds.ls(f"{MASK_PREFIX}transform", type="transform")
+    if mask_transform:
+        cmds.setAttr(f"{mask_transform[0]}.scale", scale, scale, scale, type="double3")
+        cmds.setAttr(f"{mask_transform[0]}.maskScale", scale)
+        return True
+    return False
+
+def update_shot_mask_position(y_offset=0.0, z_distance=-1.0):
+    """Update the position of the shot mask."""
+    import maya.cmds as cmds
+    from conestoga_playblast_presets import MASK_PREFIX
+    mask_transform = cmds.ls(f"{MASK_PREFIX}transform", type="transform")
+    if mask_transform:
+        cmds.setAttr(f"{mask_transform[0]}.translateY", y_offset)
+        cmds.setAttr(f"{mask_transform[0]}.translateZ", z_distance)
+        return True
+    return False
+
+def update_shot_mask_text_color(color):
+    """Update the text color of the shot mask."""
+    import maya.cmds as cmds
+    from conestoga_playblast_presets import MASK_PREFIX
+    text_material = cmds.ls(f"{MASK_PREFIX}TextMaterial", type="lambert")
+    if text_material:
+        cmds.setAttr(f"{text_material[0]}.color", color[0], color[1], color[2], type="double3")
+        return True
+    return False
+
+def update_shot_mask_opacity(opacity):
+    """Update the opacity of the shot mask."""
+    import maya.cmds as cmds
+    from conestoga_playblast_presets import MASK_PREFIX
+    mask_transform = cmds.ls(f"{MASK_PREFIX}transform", type="transform")
+    mask_material = cmds.ls(f"{MASK_PREFIX}Material", type="lambert")
+    text_material = cmds.ls(f"{MASK_PREFIX}TextMaterial", type="lambert")
+    
+    if mask_transform:
+        cmds.setAttr(f"{mask_transform[0]}.opacity", opacity)
+    
+    if mask_material:
+        transparency = 1.0 - opacity
+        cmds.setAttr(f"{mask_material[0]}.transparency", transparency, transparency, transparency, type="double3")
+    
+    if text_material:
+        transparency = 1.0 - opacity
+        cmds.setAttr(f"{text_material[0]}.transparency", transparency, transparency, transparency, type="double3")
+    
+    return mask_material or text_material
+
+def safe_execute(func):
+    """Decorator for safely executing functions with error handling."""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            cmds.warning(f"Error in {func.__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+    return wrapper
+
+def encode_with_ffmpeg(input_path, output_path, settings=None):
+    """
+    Encode video using FFmpeg with specified settings.
+    
+    Args:
+        input_path (str): Input file or pattern (e.g., '%04d.png')
+        output_path (str): Output file path
+        settings (dict): Encoding settings
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if settings is None:
+        settings = {}
+        
+    ffmpeg_path = get_ffmpeg_path()
+    if not ffmpeg_path:
+        cmds.warning("FFmpeg not available. Cannot encode video.")
+        return False
+        
+    encoder = settings.get("encoder", "h264")
+    quality = settings.get("quality", "High")
+    preset = settings.get("preset", "fast")
+    framerate = settings.get("framerate", 24)
+    
+    args = [ffmpeg_path, "-y"]
+    
+    if input_path.endswith(".%04d.png") or input_path.endswith(".%04d.jpg") or input_path.endswith(".%04d.tif"):
+        args.extend(["-framerate", str(framerate), "-i", input_path])
+    else:
+        args.extend(["-i", input_path])
+    
+    audio_path = settings.get("audio_path", None)
+    audio_offset = settings.get("audio_offset", 0)
+    if audio_path and os.path.exists(audio_path):
+        args.extend(["-ss", str(audio_offset), "-i", audio_path])
+    
+    if encoder == "h264":
+        h264_qualities = {
+            "Very High": 18,
+            "High": 20,
+            "Medium": 23,
+            "Low": 26
+        }
+        crf = h264_qualities.get(quality, 23)
+        args.extend([
+            "-c:v", "libx264",
+            "-crf", str(crf),
+            "-preset", preset,
+            "-pix_fmt", "yuv420p"
+        ])
+    elif encoder == "prores":
+        prores_profiles = {
+            "ProRes 422 Proxy": 0,
+            "ProRes 422 LT": 1,
+            "ProRes 422": 2,
+            "ProRes 422 HQ": 3,
+            "ProRes 4444": 4,
+            "ProRes 4444 XQ": 5
+        }
+        profile = prores_profiles.get(quality, 3)
+        args.extend([
+            "-c:v", "prores_ks",
+            "-profile:v", str(profile),
+            "-vendor", "apl0",
+            "-pix_fmt", "yuv422p10le"
+        ])
+        
+    if audio_path and os.path.exists(audio_path):
+        args.extend(["-c:a", "aac", "-b:a", "192k", "-shortest"])
+    
+    args.append(output_path)
+    
+    try:
+        print(f"Running FFmpeg command: {' '.join(args)}")
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        stdout, stderr = process.communicate()
+        
+        if process.returncode != 0:
+            cmds.warning(f"FFmpeg encoding failed: {stderr}")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        cmds.warning(f"Error running FFmpeg: {str(e)}")
+        return False
+
+def get_frame_rate():
+    """Get the current frame rate in Maya."""
+    import maya.cmds as cmds
+    import maya.mel as mel
+    
+    rate_str = cmds.currentUnit(q=True, time=True)
+    
+    if rate_str == "game":
+        frame_rate = 15.0
+    elif rate_str == "film":
+        frame_rate = 24.0
+    elif rate_str == "pal":
+        frame_rate = 25.0
+    elif rate_str == "ntsc":
+        frame_rate = 30.0
+    elif rate_str == "show":
+        frame_rate = 48.0
+    elif rate_str == "palf":
+        frame_rate = 50.0
+    elif rate_str == "ntscf":
+        frame_rate = 60.0
+    elif rate_str.endswith("fps"):
+        frame_rate = float(rate_str[:-3])
+    else:
+        try:
+            frame_rate = float(mel.eval("currentTimeUnitToFPS"))
+        except:
+            frame_rate = 24.0
+            cmds.warning(f"Unsupported frame rate: {rate_str}, defaulting to 24 fps")
+    
+    return frame_rate

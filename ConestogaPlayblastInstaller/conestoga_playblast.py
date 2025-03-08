@@ -35,23 +35,44 @@ from functools import partial
 
 import maya.cmds as cmds
 import maya.mel as mel
-import maya.OpenMayaUI as omui
 
+# Define utility functions used across the module before imports that might use them
+def get_frame_rate():
+    """Get the current frame rate in Maya."""
+    rate_str = cmds.currentUnit(q=True, time=True)
+
+    if rate_str == "game":
+        frame_rate = 15.0
+    elif rate_str == "film":
+        frame_rate = 24.0
+    elif rate_str == "pal":
+        frame_rate = 25.0
+    elif rate_str == "ntsc":
+        frame_rate = 30.0
+    elif rate_str == "show":
+        frame_rate = 48.0
+    elif rate_str == "palf":
+        frame_rate = 50.0
+    elif rate_str == "ntscf":
+        frame_rate = 60.0
+    elif rate_str.endswith("fps"):
+        frame_rate = float(rate_str[0:-3])
+    else:
+        raise RuntimeError(f"Unsupported frame rate: {rate_str}")
+
+    return frame_rate
+
+# Then import the utilities and presets
 try:
-    from PySide6 import QtWidgets, QtCore, QtGui
-    from shiboken6 import wrapInstance
+    import conestoga_playblast_presets as presets
+    import conestoga_playblast_utils as utils
 except ImportError:
-    from PySide2 import QtWidgets, QtCore, QtGui
-    from shiboken2 import wrapInstance
-
-# Add the plugin directory to the path if needed
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.append(script_dir)
-
-# Import utility modules
-import conestoga_playblast_presets as presets
-import conestoga_playblast_utils as utils
+    # Add the tool directory to the Python path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.append(script_dir)
+    import conestoga_playblast_presets as presets
+    import conestoga_playblast_utils as utils
 
 # Global variables
 _playblast_in_progress = False
@@ -108,13 +129,34 @@ def create_playblast(
         str: Path to the created playblast file or None if failed
     """
     global _playblast_in_progress
-    
-    # Don't allow nested playblasts
+        
+        # Don't allow nested playblasts - this check should come FIRST
     if _playblast_in_progress:
-        cmds.warning("A playblast is already in progress")
+            cmds.warning("A playblast is already in progress")
+            return None
+        
+        # Check if FFmpeg is required but not available
+    if format_type in presets.MOVIE_FORMATS and not utils.is_ffmpeg_available():
+        cmds.warning("FFmpeg is required but not available. Please install FFmpeg or choose Image format.")
+        ffmpeg_path = utils.get_ffmpeg_path()
+        if not ffmpeg_path:
+            cmds.confirmDialog(
+                title="FFmpeg Not Found",
+                message="FFmpeg executable not found. Video encoding features will be limited.\n\nPlease configure FFmpeg in the Settings tab.",
+                button=["OK"],
+                defaultButton="OK"
+            )
+        else:
+            cmds.confirmDialog(
+                title="FFmpeg Test Failed",
+                message=f"FFmpeg executable found at:\n{ffmpeg_path}\n\nBut it could not be executed successfully. Please check the path and permissions.",
+                button=["OK"],
+                defaultButton="OK"
+            )
         return None
-    
-    _playblast_in_progress = True
+        
+        # Set the in-progress flag AFTER all early-return checks
+        _playblast_in_progress = True
     
     try:
         # Validate and set defaults
