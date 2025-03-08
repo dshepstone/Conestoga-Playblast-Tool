@@ -524,16 +524,25 @@ def show_in_viewer(file_path):
 
 def show_ui():
     """Show the main playblast UI."""
-    # Import UI module here to avoid circular imports
-    import conestoga_playblast_ui
-    
-    # Reset any existing shot mask
-    utils.remove_shot_mask()
-    
-    # Show the UI
-    ui = conestoga_playblast_ui.show_playblast_dialog()
-    return ui
-
+    try:
+        # Import the UI module
+        import conestoga_playblast_ui
+        
+        # Reset any existing shot mask
+        utils.remove_shot_mask()
+        
+        # Initialize and show the dialog
+        dialog = conestoga_playblast_ui.show_playblast_dialog()
+        
+        # Return the dialog instance
+        return dialog
+    except Exception as e:
+        import maya.cmds as cmds
+        cmds.warning(f"Error showing Conestoga Playblast UI: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+   
 def main():
     """Main function when run as a script."""
     show_ui()

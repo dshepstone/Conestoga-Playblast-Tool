@@ -1,0 +1,28 @@
+// Conestoga Playblast Tool - Drag and Drop Installer
+// Just drag this file into Maya's viewport to install
+
+global proc installConestoPlayblast() {
+    // Get the path to this script
+    string $scriptPath = `whatIs installConestoPlayblast`;
+    $scriptPath = `substring $scriptPath 25 (size($scriptPath))`;
+    
+    // Get the directory
+    string $sourceDir = `dirname $scriptPath`;
+    
+    // Build a Python command to run the installer
+    string $command = "import sys, os\n";
+    $command += "source_dir = r'" + $sourceDir + "'\n";
+    $command += "if source_dir not in sys.path: sys.path.append(source_dir)\n";
+    $command += "try:\n";
+    $command += "    import conestoga_playblast_installer\n";
+    $command += "    conestoga_playblast_installer.install()\n";
+    $command += "except Exception as e:\n";
+    $command += "    import maya.cmds as cmds\n";
+    $command += "    cmds.error('Error running installer: ' + str(e))\n";
+    
+    // Execute the Python command
+    python($command);
+}
+
+// Run the installer immediately when dropped
+installConestoPlayblast();

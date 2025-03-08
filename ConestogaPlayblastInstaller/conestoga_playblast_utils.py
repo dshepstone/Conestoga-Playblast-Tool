@@ -13,9 +13,6 @@ import tempfile
 import shutil
 import re
 
-import maya.cmds as cmds
-import maya.mel as mel
-
 # Add script directory to path if needed
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
@@ -599,3 +596,145 @@ def export_camera_path_for_overlay(camera, start_frame, end_frame, output_dir=No
         json.dump(camera_data, f, indent=2)
     
     return output_path
+def remove_shot_mask():
+    """Remove the shot mask if it exists."""
+    import maya.cmds as cmds
+    
+    # Look for nodes with the mask prefix
+    from conestoga_playblast_presets import MASK_PREFIX
+    
+    # Find all shot mask nodes
+    mask_nodes = []
+    
+    # Try to find transform nodes
+    transforms = cmds.ls(MASK_PREFIX + "*", type="transform")
+    if transforms:
+        mask_nodes.extend(transforms)
+    
+    # Try to find materials
+    materials = cmds.ls(MASK_PREFIX + "*Material", type="lambert")
+    if materials:
+        mask_nodes.extend(materials)
+    
+    # Try to find textures
+    textures = cmds.ls(MASK_PREFIX + "*Text", type="mesh")
+    if textures:
+        mask_nodes.extend(textures)
+    
+    # Delete all found nodes
+    if mask_nodes:
+        try:
+            cmds.delete(mask_nodes)
+            print(f"Shot mask removed: {len(mask_nodes)} nodes deleted")
+            return True
+        except Exception as e:
+            print(f"Error removing shot mask: {str(e)}")
+    
+    return False
+
+def get_maya_main_window():
+    """Get Maya's main window as a Qt widget."""
+    import maya.OpenMayaUI as omui
+    try:
+        from shiboken2 import wrapInstance
+    except ImportError:
+        from shiboken6 import wrapInstance
+    
+    ptr = omui.MQtUtil.mainWindow()
+    if ptr is not None:
+        return wrapInstance(int(ptr), QtWidgets.QWidget)
+    return None
+
+def get_ffmpeg_path():
+    """Get the configured FFmpeg path."""
+    # Try to get from option var first
+    path = cmds.optionVar(q="ffmpegPath") if cmds.optionVar(exists="ffmpegPath") else ""
+    
+    # If not set, try some common locations
+    if not path or not os.path.exists(path):
+        # Common locations by platform
+        if platform.system() == "Windows":
+            common_paths = [
+                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "ffmpeg", "bin", "ffmpeg.exe"),
+                os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "ffmpeg", "bin", "ffmpeg.exe")
+            ]
+        elif platform.system() == "Darwin":  # macOS
+            common_paths = [
+                "/usr/local/bin/ffmpeg",
+                "/opt/homebrew/bin/ffmpeg"
+            ]
+        else:  # Linux
+            common_paths = [
+                "/usr/bin/ffmpeg",
+                "/usr/local/bin/ffmpeg"
+            ]
+            
+        # Check if any of the common paths exist
+        for common_path in common_paths:
+            if os.path.exists(common_path):
+                path = common_path
+                break
+    
+    return path
+
+def is_ffmpeg_available():
+    """Check if FFmpeg is available."""
+    ffmpeg_path = get_ffmpeg_path()
+    if not ffmpeg_path or not os.path.exists(ffmpeg_path):
+        return False
+        
+    # Try to run ffmpeg to check if it works
+    try:
+        subprocess.run([ffmpeg_path, "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        return True
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+def get_camera_shape(camera):
+    """Get the shape node of a camera."""
+    if not cmds.objExists(camera):
+        return None
+        
+    # Check if it's already a shape node
+    if cmds.nodeType(camera) == "camera":
+        return camera
+        
+    # Get shape node from transform
+    shapes = cmds.listRelatives(camera, shapes=True, type="camera")
+    if shapes:
+        return shapes[0]
+        
+    return None
+
+def get_valid_model_panel():
+    """Get a valid model panel that is visible."""
+    # Try to get the focused panel first
+    panel = cmds.getPanel(withFocus=True)
+    
+    # Check if it's a model panel
+    if cmds.getPanel(typeOf=panel) == "modelPanel":
+        return panel
+        
+    # Try to find any model panel
+    model_panels = cmds.getPanel(type="modelPanel")
+    for panel in model_panels:
+        if cmds.modelPanel(panel, query=True, visible=True):
+            return panel
+    
+    return None
+
+def toggle_shot_mask():
+    """Toggle the shot mask on/off."""
+    # Check if mask exists
+    from conestoga_playblast_presets import MASK_PREFIX
+    mask_nodes = cmds.ls(MASK_PREFIX + "*", type="transform")
+    
+    if mask_nodes:
+        # Mask exists, remove it
+        remove_shot_mask()
+        return False
+    else:
+        # Mask doesn't exist, create it
+        import conestoga_playblast
+        conestoga_playblast.show_ui()
+        return True
