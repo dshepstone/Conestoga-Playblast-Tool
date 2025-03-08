@@ -493,3 +493,30 @@ def show_playblast_dialog():
     
     # Return dialog instance
     return dialog
+
+def show_playblast_dialog():
+    """Show the main playblast dialog."""
+    print("Starting show_playblast_dialog function")
+    try:
+        # Get Maya main window as parent
+        print("Getting Maya main window")
+        try:
+            parent = utils.get_maya_main_window()
+        except Exception as e:
+            print(f"Error getting Maya window: {str(e)}")
+            parent = None
+        
+        print("Creating dialog")
+        dialog = PlayblastDialog(parent)
+        
+        print("Showing dialog")
+        dialog.show()
+        
+        print("Dialog created and shown")
+        return dialog
+        
+    except Exception as e:
+        import traceback
+        print(f"Error creating playblast dialog: {str(e)}")
+        traceback.print_exc()
+        return None

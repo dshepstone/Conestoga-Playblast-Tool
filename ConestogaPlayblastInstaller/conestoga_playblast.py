@@ -129,13 +129,13 @@ def create_playblast(
         str: Path to the created playblast file or None if failed
     """
     global _playblast_in_progress
-        
-        # Don't allow nested playblasts - this check should come FIRST
+    
+    # Don't allow nested playblasts - this check should come FIRST
     if _playblast_in_progress:
-            cmds.warning("A playblast is already in progress")
-            return None
-        
-        # Check if FFmpeg is required but not available
+        cmds.warning("A playblast is already in progress")
+        return None
+    
+    # Check if FFmpeg is required but not available
     if format_type in presets.MOVIE_FORMATS and not utils.is_ffmpeg_available():
         cmds.warning("FFmpeg is required but not available. Please install FFmpeg or choose Image format.")
         ffmpeg_path = utils.get_ffmpeg_path()
@@ -154,9 +154,9 @@ def create_playblast(
                 defaultButton="OK"
             )
         return None
-        
-        # Set the in-progress flag AFTER all early-return checks
-        _playblast_in_progress = True
+    
+    # Set the in-progress flag AFTER all early-return checks
+    _playblast_in_progress = True
     
     try:
         # Validate and set defaults
@@ -322,16 +322,16 @@ def create_playblast(
                 # Encode with ffmpeg
                 if not utils.encode_with_ffmpeg(input_pattern, output_path, ffmpeg_settings):
                     cmds.warning("ffmpeg encoding failed")
+                
+                # Show the result in the viewer if requested
+                if show_in_viewer and os.path.exists(output_path):
+                    show_in_viewer(output_path)
+                
+                print(f"Playblast completed: {output_path}")
+                cmds.headsUpMessage(f"Playblast saved to: {output_path}", time=3.0)
+                
+                return output_path
             
-            # Show the result in the viewer if requested
-            if show_in_viewer and os.path.exists(output_path):
-                show_in_viewer(output_path)
-            
-            print(f"Playblast completed: {output_path}")
-            cmds.headsUpMessage(f"Playblast saved to: {output_path}", time=3.0)
-            
-            return output_path
-        
         finally:
             # Restore original viewport and camera settings
             cmds.lookThru(original_camera) if original_camera else None
@@ -346,7 +346,7 @@ def create_playblast(
             
             # Clean up temp files
             clean_temp_directories()
-    
+
     except Exception as e:
         cmds.warning(f"Playblast failed: {str(e)}")
         traceback.print_exc()
@@ -377,11 +377,9 @@ def batch_playblast(
         cmds.warning("No cameras specified for batch playblast")
         return []
     
-    # Default settings
     if settings is None:
         settings = {}
     
-    # Create progress window
     progress_window = cmds.progressWindow(
         title="Batch Playblast",
         progress=0,
@@ -394,7 +392,6 @@ def batch_playblast(
     
     try:
         for i, camera in enumerate(cameras):
-            # Update progress
             if cmds.progressWindow(query=True, isCancelled=True):
                 break
             
@@ -405,25 +402,21 @@ def batch_playblast(
                 status=f"Creating playblast for camera: {camera}"
             )
             
-            # Create playblast with this camera
             camera_filename = filename
             if filename and "{camera}" not in filename:
                 camera_name = camera.split('|')[-1].split(':')[-1]
                 camera_filename = f"{filename}_{camera_name}"
             
-            # Copy settings and update for this camera
             camera_settings = settings.copy()
             camera_settings["camera"] = camera
             camera_settings["output_dir"] = output_dir
             camera_settings["filename"] = camera_filename
             
-            # Create playblast
             result = create_playblast(**camera_settings)
             if result:
                 results.append(result)
     
     finally:
-        # Close progress window
         cmds.progressWindow(endProgress=1)
     
     return results
@@ -446,33 +439,27 @@ def parse_filename_tags(filename, camera):
     if not filename:
         return filename
     
-    # Get scene name
     if "{scene}" in filename:
         scene_path = cmds.file(query=True, sceneName=True, shortName=True)
         scene_name = os.path.splitext(scene_path)[0] if scene_path else "untitled"
         filename = filename.replace("{scene}", scene_name)
     
-    # Get camera name
     if "{camera}" in filename:
         camera_name = camera.split('|')[-1].split(':')[-1]
         filename = filename.replace("{camera}", camera_name)
     
-    # Get date
     if "{date}" in filename:
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         filename = filename.replace("{date}", date_str)
     
-    # Get time
     if "{time}" in filename:
         time_str = datetime.datetime.now().strftime("%H%M%S")
         filename = filename.replace("{time}", time_str)
     
-    # Get timestamp
     if "{timestamp}" in filename:
         timestamp = int(time.time())
         filename = filename.replace("{timestamp}", str(timestamp))
     
-    # Remove any invalid characters
     filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
     
     return filename
@@ -490,60 +477,46 @@ def configure_output_path(output_dir, filename, format_type, encoder):
     Returns:
         str: Full output path
     """
-    # Ensure output directory exists
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # Determine extension
     if format_type == "Image":
         extension = encoder.lower()
     else:
         extension = format_type.lower()
     
-    # Build output path
     output_path = os.path.normpath(os.path.join(output_dir, f"{filename}.{extension}"))
     
     return output_path
 
 def create_temp_directory():
     """Create a temporary directory for playblast files."""
-    # Get custom temp dir if set
     temp_base = utils.load_option_var("tempDir", tempfile.gettempdir())
-    
-    # Create a unique subdirectory
     timestamp = int(time.time())
     temp_dir = os.path.join(temp_base, f"conestoga_playblast_{timestamp}")
-    
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
-    
     return temp_dir
 
 def clean_temp_directories():
     """Clean up temporary directories after playblast."""
     global _temp_dirs
-    
     for temp_dir in _temp_dirs:
         try:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
         except Exception as e:
             print(f"Warning: Failed to remove temp directory {temp_dir}: {e}")
-    
     _temp_dirs = []
 
 def get_active_sound_node():
     """Get the active sound node in the timeline."""
-    # Try timeline audio
     timeline_sound = mel.eval("timeControl -q -sound $gPlayBackSlider;")
     if timeline_sound and cmds.objExists(timeline_sound):
         return timeline_sound
-    
-    # Try scene audio nodes
     audio_nodes = cmds.ls(type="audio")
     if audio_nodes:
         return audio_nodes[0]
-    
     return None
 
 def show_in_viewer(file_path):
@@ -556,38 +529,8 @@ def show_in_viewer(file_path):
     if not os.path.exists(file_path):
         cmds.warning(f"File does not exist: {file_path}")
         return
-    
     # Use PySide to open the file
     QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file_path))
-
-# ===========================================================================
-# UI FUNCTIONS
-# ===========================================================================
-
-# def show_ui():
-#     """Show the main playblast UI."""
-#     try:
-#         # Import the UI module (change to new filename)
-#         import conestoga_playblast_gui as ui_module
-        
-#         # Reset any existing shot mask
-#         utils.remove_shot_mask()
-        
-#         # Initialize and show the dialog
-#         dialog = ui_module.show_playblast_dialog()
-        
-#         # Return the dialog instance
-#         return dialog
-#     except Exception as e:
-#         import maya.cmds as cmds
-#         cmds.warning(f"Error showing Conestoga Playblast UI: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return None
-   
-def main():
-    """Main function when run as a script."""
-    show_ui()
 
 # ===========================================================================
 # PLUGIN MANAGEMENT
@@ -601,12 +544,8 @@ def load_plugin():
         bool: True if plugin is loaded, False otherwise
     """
     plugin_name = "conestoga-playblast-plugin.py"
-    
-    # Check if plugin is already loaded
     if cmds.pluginInfo(plugin_name, query=True, loaded=True):
         return True
-    
-    # Try to load plugin
     try:
         cmds.loadPlugin(plugin_name)
         print(f"Loaded plugin: {plugin_name}")
@@ -614,11 +553,11 @@ def load_plugin():
     except Exception as e:
         cmds.warning(f"Failed to load plugin {plugin_name}: {str(e)}")
         return False
-    
+
 def show_ui():
     """
     Show the Conestoga Playblast UI.
-
+    
     This function imports the GUI module (conestoga_playblast_ui.py) and calls its
     function to display the playblast dialog.
     """
@@ -627,9 +566,14 @@ def show_ui():
 
 # For backwards compatibility, alias show_ui as show_playblast
 show_playblast = show_ui
+
 # ===========================================================================
 # ENTRY POINT
 # ===========================================================================
+
+def main():
+    """Main function when run as a script."""
+    show_ui()
 
 if __name__ == "__main__":
     main()

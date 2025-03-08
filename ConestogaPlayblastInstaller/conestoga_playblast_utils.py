@@ -630,6 +630,16 @@ def remove_shot_mask():
 def get_maya_main_window():
     """Get Maya's main window as a Qt widget."""
     import maya.OpenMayaUI as omui
+    
+    # Add these Qt imports inside the function
+    try:
+        from PySide6 import QtWidgets
+    except ImportError:
+        try:
+            from PySide2 import QtWidgets
+        except ImportError:
+            from PySide import QtWidgets
+    
     try:
         from shiboken2 import wrapInstance
     except ImportError:
