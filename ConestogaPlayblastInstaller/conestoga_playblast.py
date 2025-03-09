@@ -14,8 +14,10 @@ Usage:
         camera="persp",
         output_dir="/path/to/output",
         filename="my_playblast",
-        resolution=(1920, 1080),
-        frame_range=(1, 100),
+        width=1920,
+        height=1080,
+        start_frame=1,
+        end_frame=100,
         shot_mask=True
     )
 """
@@ -35,6 +37,22 @@ from functools import partial
 
 import maya.cmds as cmds
 import maya.mel as mel
+import getpass
+
+# Set up Qt imports with proper fallbacks
+QtGui = None
+QtCore = None
+
+# Attempt to import QtGui and QtCore from PySide6 or PySide2
+QtGui, QtCore = None, None
+for module_name in ("PySide6", "PySide2"):
+    try:
+        module = __import__(module_name, fromlist=["QtGui", "QtCore"])
+        QtGui = module.QtGui
+        QtCore = module.QtCore
+        break
+    except ImportError:
+        continue
 
 # Define utility functions used across the module before imports that might use them
 def get_frame_rate():
@@ -56,13 +74,14 @@ def get_frame_rate():
     elif rate_str == "ntscf":
         frame_rate = 60.0
     elif rate_str.endswith("fps"):
-        frame_rate = float(rate_str[0:-3])
+        frame_rate = float(rate_str[:-3])
     else:
         raise RuntimeError(f"Unsupported frame rate: {rate_str}")
 
     return frame_rate
 
-# Then import the utilities and presets
+
+# Import the utilities and presets
 try:
     import conestoga_playblast_presets as presets
     import conestoga_playblast_utils as utils
@@ -71,12 +90,16 @@ except ImportError:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.append(script_dir)
-    import conestoga_playblast_presets as presets
-    import conestoga_playblast_utils as utils
+    try:
+        import conestoga_playblast_presets as presets
+        import conestoga_playblast_utils as utils
+    except ImportError:
+        raise ImportError("Could not import required modules. Make sure conestoga_playblast_presets.py and conestoga_playblast_utils.py are in the same directory.")
 
 # Global variables
 _playblast_in_progress = False
 _temp_dirs = []
+
 
 # ===========================================================================
 # MAIN PLAYBLAST FUNCTIONS
@@ -97,7 +120,7 @@ def create_playblast(
     shot_mask=True,
     overscan=False,
     ornaments=False,
-    show_in_viewer=True,
+    open_viewer=True,  # Renamed to avoid conflict with the helper function
     force_overwrite=False,
     custom_viewport_settings=None,
     shot_mask_settings=None
@@ -120,7 +143,7 @@ def create_playblast(
         shot_mask (bool): Whether to include a shot mask
         overscan (bool): Enable camera overscan
         ornaments (bool): Show UI ornaments
-        show_in_viewer (bool): Open the result in a viewer when done
+        open_viewer (bool): Open the result in a viewer when done
         force_overwrite (bool): Overwrite existing files
         custom_viewport_settings (list): Custom viewport settings (None = use preset)
         shot_mask_settings (dict): Custom shot mask settings
@@ -128,14 +151,13 @@ def create_playblast(
     Returns:
         str: Path to the created playblast file or None if failed
     """
-    global _playblast_in_progress
+    global _playblast_in_progress, _temp_dirs
     
-    # Don't allow nested playblasts - this check should come FIRST
+    # Initial checks
     if _playblast_in_progress:
         cmds.warning("A playblast is already in progress")
         return None
     
-    # Check if FFmpeg is required but not available
     if format_type in presets.MOVIE_FORMATS and not utils.is_ffmpeg_available():
         cmds.warning("FFmpeg is required but not available. Please install FFmpeg or choose Image format.")
         ffmpeg_path = utils.get_ffmpeg_path()
@@ -155,11 +177,19 @@ def create_playblast(
             )
         return None
     
-    # Set the in-progress flag AFTER all early-return checks
+    # Marking that we're starting a playblast
     _playblast_in_progress = True
     
+    # Variables that need to be tracked for cleanup
+    temp_dir = None
+    original_camera = None
+    viewport_defaults = None
+    image_plane_states = None
+    shot_mask_created = False
+    output_path = None
+    
     try:
-        # Validate and set defaults
+        # Validate camera
         if camera is None:
             panel = utils.get_valid_model_panel()
             if panel:
@@ -167,37 +197,33 @@ def create_playblast(
         
         if not camera or not cmds.objExists(camera):
             cmds.warning(f"Invalid camera: {camera}")
-            _playblast_in_progress = False
             return None
         
-        # Default output directory to project/movies
+        # Setup output paths
         if not output_dir:
             output_dir = os.path.join(cmds.workspace(query=True, rootDirectory=True), "movies")
         
-        # Default filename to scene_camera
         if not filename:
             scene_name = cmds.file(query=True, sceneName=True, shortName=True).split('.')[0] or "untitled"
             camera_name = camera.split('|')[-1].split(':')[-1]
             filename = f"{scene_name}_{camera_name}"
         
-        # Replace tags in filename
         filename = parse_filename_tags(filename, camera)
         
-        # Parse frame range
+        # Setup frame range
         if start_frame is None:
             start_frame = int(cmds.playbackOptions(query=True, minTime=True))
         if end_frame is None:
             end_frame = int(cmds.playbackOptions(query=True, maxTime=True))
         
-        # Get resolution
+        # Setup resolution
         if width is None or height is None:
             width = cmds.getAttr("defaultResolution.width")
             height = cmds.getAttr("defaultResolution.height")
         
-        # Configure the output path
         output_path = configure_output_path(output_dir, filename, format_type, encoder)
         
-        # Check if file exists and handle overwrite
+        # Check for existing file
         if os.path.exists(output_path) and not force_overwrite:
             result = cmds.confirmDialog(
                 title="File Exists",
@@ -210,64 +236,47 @@ def create_playblast(
             
             if result != "Yes":
                 cmds.warning("Playblast cancelled - file exists")
-                _playblast_in_progress = False
                 return None
         
-        # Create temporary directory for intermediate files
+        # Setup temp directory
         temp_dir = create_temp_directory()
-        global _temp_dirs
         _temp_dirs.append(temp_dir)
         
-        # Create temporary file pattern
-        temp_file_pattern = os.path.join(temp_dir, f"{filename}")
-        
-        # Determine if using ffmpeg for encoding
+        # Setup playblast parameters
         use_ffmpeg = format_type in presets.MOVIE_FORMATS and utils.is_ffmpeg_available()
         
         if use_ffmpeg:
-            # For ffmpeg, we'll create a temporary sequence
-            temp_format = "png"  # Use PNG for best quality temporaries
-            temp_file_pattern = os.path.join(temp_dir, f"{filename}.%04d.{temp_format}")
+            temp_format = "png"
             playblast_format = "image"
             compression = temp_format
             playblast_filename = os.path.join(temp_dir, filename)
         else:
-            # Direct Maya playblast
             if format_type == "Image":
                 playblast_format = "image"
                 compression = encoder
             else:
                 playblast_format = "movie"
-                compression = None  # Use maya's default
+                compression = None
             
             playblast_filename = os.path.normpath(output_path)
         
-        # Get valid model panel and store the state
+        # Setup viewport
         model_panel = utils.get_valid_model_panel()
         if not model_panel:
             cmds.warning("No valid model panel found")
-            _playblast_in_progress = False
             return None
         
-        # Store original viewport and camera settings
         original_camera = cmds.modelPanel(model_panel, query=True, camera=True)
         viewport_defaults = utils.get_viewport_defaults(model_panel, camera)
-        
-        # Store original image plane states
         image_plane_states = utils.disable_image_planes(camera)
         
-        # Create shot mask if needed
-        shot_mask_created = False
+        # Setup shot mask
         if shot_mask:
-            # Apply default or custom shot mask settings
             settings = presets.CUSTOM_MASK_TEMPLATES.get("Standard", {})
             if shot_mask_settings:
                 settings.update(shot_mask_settings)
             
-            # Get username
             user_name = settings.get("userName", os.getenv("USER") or getpass.getuser())
-            
-            # Create the mask
             mask_data = utils.create_shot_mask(camera, user_name)
             shot_mask_created = bool(mask_data)
         
@@ -285,75 +294,90 @@ def create_playblast(
                 forceOverwrite=True,
                 format=playblast_format,
                 compression=compression,
-                quality=100,  # Always use highest quality
+                quality=100,
                 width=width,
                 height=height,
                 startTime=start_frame,
                 endTime=end_frame,
-                viewer=False,  # We'll handle this ourselves
+                viewer=False,
                 showOrnaments=ornaments,
                 offScreen=not ornaments,
                 percent=100,
                 clearCache=True
             )
             
-            # Use ffmpeg for encoding if needed
+            # Encode with ffmpeg if needed
             if use_ffmpeg:
                 input_pattern = os.path.join(temp_dir, f"{filename}.%04d.{temp_format}")
                 print(f"Encoding with ffmpeg: {input_pattern} -> {output_path}")
                 
-                # Configure ffmpeg settings
                 ffmpeg_settings = {
                     "encoder": encoder,
                     "quality": quality,
                     "preset": utils.load_option_var("h264Preset", presets.DEFAULT_H264_PRESET),
-                    "framerate": utils.get_frame_rate()
+                    "framerate": get_frame_rate()
                 }
                 
-                # Add audio if available
                 sound_node = get_active_sound_node()
                 if sound_node:
                     audio_path = cmds.getAttr(f"{sound_node}.filename")
                     audio_offset = cmds.getAttr(f"{sound_node}.offset")
                     if os.path.exists(audio_path):
                         ffmpeg_settings["audio_path"] = audio_path
-                        ffmpeg_settings["audio_offset"] = audio_offset / utils.get_frame_rate()
+                        ffmpeg_settings["audio_offset"] = audio_offset / get_frame_rate()
                 
-                # Encode with ffmpeg
                 if not utils.encode_with_ffmpeg(input_pattern, output_path, ffmpeg_settings):
                     cmds.warning("ffmpeg encoding failed")
-                
-                # Show the result in the viewer if requested
-                if show_in_viewer and os.path.exists(output_path):
-                    show_in_viewer(output_path)
-                
-                print(f"Playblast completed: {output_path}")
-                cmds.headsUpMessage(f"Playblast saved to: {output_path}", time=3.0)
-                
-                return output_path
+            
+            # Show the result in the viewer using the helper function
+            if open_viewer and os.path.exists(output_path):
+                show_in_viewer(output_path)
+            
+            print(f"Playblast completed: {output_path}")
+            cmds.headsUpMessage(f"Playblast saved to: {output_path}", time=3.0)
+            
+            return output_path
             
         finally:
             # Restore original viewport and camera settings
-            cmds.lookThru(original_camera) if original_camera else None
-            utils.restore_viewport(model_panel, camera, viewport_defaults)
-            
-            # Restore image planes
-            utils.restore_image_planes(image_plane_states)
-            
-            # Remove shot mask if we created it
+            if original_camera:
+                try:
+                    cmds.lookThru(original_camera)
+                except Exception:
+                    pass
+                    
+            if model_panel and viewport_defaults:
+                try:
+                    utils.restore_viewport(model_panel, camera, viewport_defaults)
+                except Exception:
+                    pass
+                    
+            if image_plane_states:
+                try:
+                    utils.restore_image_planes(image_plane_states)
+                except Exception:
+                    pass
+                    
             if shot_mask_created:
-                utils.remove_shot_mask()
-            
-            # Clean up temp files
-            clean_temp_directories()
-
+                try:
+                    utils.remove_shot_mask()
+                except Exception:
+                    pass
+    
     except Exception as e:
         cmds.warning(f"Playblast failed: {str(e)}")
         traceback.print_exc()
         return None
-    
+        
     finally:
+        # Always clean up temp directories and reset progress flag
+        try:
+            clean_temp_directories()
+        except Exception:
+            pass
+            
         _playblast_in_progress = False
+
 
 def batch_playblast(
     cameras,
@@ -421,6 +445,7 @@ def batch_playblast(
     
     return results
 
+
 # ===========================================================================
 # HELPER FUNCTIONS
 # ===========================================================================
@@ -464,6 +489,7 @@ def parse_filename_tags(filename, camera):
     
     return filename
 
+
 def configure_output_path(output_dir, filename, format_type, encoder):
     """
     Configure the output path based on format and encoder.
@@ -489,6 +515,7 @@ def configure_output_path(output_dir, filename, format_type, encoder):
     
     return output_path
 
+
 def create_temp_directory():
     """Create a temporary directory for playblast files."""
     temp_base = utils.load_option_var("tempDir", tempfile.gettempdir())
@@ -497,6 +524,7 @@ def create_temp_directory():
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
     return temp_dir
+
 
 def clean_temp_directories():
     """Clean up temporary directories after playblast."""
@@ -509,6 +537,7 @@ def clean_temp_directories():
             print(f"Warning: Failed to remove temp directory {temp_dir}: {e}")
     _temp_dirs = []
 
+
 def get_active_sound_node():
     """Get the active sound node in the timeline."""
     timeline_sound = mel.eval("timeControl -q -sound $gPlayBackSlider;")
@@ -519,18 +548,37 @@ def get_active_sound_node():
         return audio_nodes[0]
     return None
 
+
 def show_in_viewer(file_path):
     """
-    Open the playblast in the default viewer.
+    Open the playblast in an external viewer.
     
     Args:
-        file_path (str): Path to the playblast file
+        file_path (str): Path to the file to open
     """
     if not os.path.exists(file_path):
         cmds.warning(f"File does not exist: {file_path}")
         return
-    # Use PySide to open the file
-    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file_path))
+    
+    # First try using Qt if available
+    if QtGui is not None and QtCore is not None:
+        try:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file_path))
+            return
+        except Exception as e:
+            cmds.warning(f"Qt viewer failed: {str(e)}")
+    
+    # Fallback method using OS commands
+    try:
+        if sys.platform == "win32":
+            os.system(f'start "" "{file_path}"')
+        elif sys.platform == "darwin":
+            os.system(f'open "{file_path}"')
+        else:  # Linux
+            os.system(f'xdg-open "{file_path}"')
+    except Exception as e:
+        cmds.warning(f"Failed to open file: {str(e)}")
+
 
 # ===========================================================================
 # PLUGIN MANAGEMENT
@@ -554,6 +602,7 @@ def load_plugin():
         cmds.warning(f"Failed to load plugin {plugin_name}: {str(e)}")
         return False
 
+
 def show_ui():
     """
     Show the Conestoga Playblast UI.
@@ -561,11 +610,23 @@ def show_ui():
     This function imports the GUI module (conestoga_playblast_ui.py) and calls its
     function to display the playblast dialog.
     """
-    import conestoga_playblast_ui
-    return conestoga_playblast_ui.show_playblast_dialog()
+    try:
+        import conestoga_playblast_ui
+        return conestoga_playblast_ui.show_playblast_dialog()
+    except ImportError as e:
+        cmds.warning(f"Failed to import UI module: {str(e)}")
+        cmds.confirmDialog(
+            title="UI Module Missing",
+            message="Could not load the Conestoga Playblast UI module.\nMake sure conestoga_playblast_ui.py is installed correctly.",
+            button=["OK"],
+            defaultButton="OK"
+        )
+        return None
+
 
 # For backwards compatibility, alias show_ui as show_playblast
 show_playblast = show_ui
+
 
 # ===========================================================================
 # ENTRY POINT
@@ -574,6 +635,7 @@ show_playblast = show_ui
 def main():
     """Main function when run as a script."""
     show_ui()
+
 
 if __name__ == "__main__":
     main()

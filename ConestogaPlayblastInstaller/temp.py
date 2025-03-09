@@ -1,8 +1,6 @@
 import os
 import sys
 import time
-import tempfile
-import datetime
 import maya.cmds as cmds
 import maya.mel as mel
 import maya.OpenMayaUI as omui
@@ -10,34 +8,8 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from shiboken6 import wrapInstance
 import traceback
 
-# --- Minimal Zurbrigg Classes Definitions ---
-class ZurbriggLineEdit(QtWidgets.QLineEdit):
-    TYPE_PLAYBLAST_OUTPUT_PATH = 1
-    TYPE_PLAYBLAST_OUTPUT_FILENAME = 2
-    TYPE_SHOT_MASK_LABEL = 3
-
-    def __init__(self, type_val, parent=None):
-        super(ZurbriggLineEdit, self).__init__(parent)
-        self.type_val = type_val
-
-class ZurbriggColorButton(QtWidgets.QPushButton):
-    def __init__(self, color=(1.0, 1.0, 1.0), parent=None):
-        super(ZurbriggColorButton, self).__init__(parent)
-        self._color = color
-        self.setText("Color")
-        # Optionally, set a background color for visual feedback
-        self.setStyleSheet("background-color: rgb(%d, %d, %d);" % 
-                           (int(color[0]*255), int(color[1]*255), int(color[2]*255)))
-    def get_color(self):
-        return self._color
-    def set_color(self, color):
-        self._color = color
-        self.setStyleSheet("background-color: rgb(%d, %d, %d);" % 
-                           (int(color[0]*255), int(color[1]*255), int(color[2]*255)))
-
-class ZurbriggFormLayout(QtWidgets.QFormLayout):
-    pass
-# --- End Minimal Zurbrigg Classes ---
+# Import required Zurbrigg modules (from your existing implementation)
+from zurbrigg_advanced_playblast_ui import ZurbriggLineEdit, ZurbriggColorButton, ZurbriggFormLayout
 
 class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -403,7 +375,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         shot_mask_layout.addWidget(border_options_group)
         
-        # Position controls
+        # Position controls (from Conestoga UI)
         position_group = QtWidgets.QGroupBox("Position Controls")
         position_layout = QtWidgets.QGridLayout(position_group)
         
@@ -425,6 +397,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         self.z_dist_spinbox.setSingleStep(0.05)
         self.z_dist_spinbox.setValue(-0.79)
         
+        # Add annotation size controls
         self.ann_size_label = QtWidgets.QLabel("Annotation Size:")
         self.ann_size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.ann_size_slider.setRange(10, 100)
@@ -446,7 +419,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         shot_mask_layout.addWidget(position_group)
         
-        # Shot mask action buttons
+        # Create and test shot mask buttons
         mask_buttons_layout = QtWidgets.QHBoxLayout()
         self.create_mask_btn = QtWidgets.QPushButton("Create Shot Mask")
         self.remove_mask_btn = QtWidgets.QPushButton("Remove Shot Mask")
@@ -641,6 +614,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
                 width = cmds.getAttr("defaultResolution.width")
                 height = cmds.getAttr("defaultResolution.height")
             else:
+                # Common resolutions
                 resolutions = {
                     "HD 720": (1280, 720),
                     "HD 1080": (1920, 1080),
@@ -669,7 +643,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             elif preset == "Render":
                 start = cmds.getAttr("defaultRenderGlobals.startFrame")
                 end = cmds.getAttr("defaultRenderGlobals.endFrame")
-            else:
+            else:  # Camera or Custom
                 return
             
             self.start_frame_spinbox.setValue(int(start))
@@ -681,6 +655,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         format_name = self.format_combo.currentText()
         self.encoder_combo.clear()
         
+        # Video encoder lookup
         video_encoder_lookup = {
             "mov": ["h264"],
             "mp4": ["h264"],
@@ -706,6 +681,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         version_type = self.version_type_combo.currentText()
         version_number = str(self.version_number_spinbox.value()).zfill(2)
         
+        # Use * for preview but _ for actual filename
         filename = f"A{assignment}*{lastname}*{firstname}*{version_type}*{version_number}.mov"
         self.filename_preview_label.setText(filename)
 
@@ -720,181 +696,64 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             cmds.warning("Please enter both last name and first name.")
             return
         
+        # Use underscores for the actual file
         filename = f"A{assignment}_{lastname}_{firstname}_{version_type}_{version_number}.mov"
         self.output_filename_le.setText(filename)
         
+        # Also update username in shot mask bottom left if default format is used
         if self.bottom_left_le.text() == "Artist: {username}":
             self.bottom_left_le.setText(f"Artist: {firstname} {lastname}")
 
     def update_user_field(self):
+        """Update the username field in the shot mask tab based on the firstname and lastname fields"""
         firstname = self.firstname_le.text()
         lastname = self.lastname_le.text()
         
         if firstname or lastname:
             full_name = f"{firstname} {lastname}".strip()
+            # Update the shot mask text if it uses the default pattern
             if self.bottom_left_le.text().startswith("Artist:"):
                 self.bottom_left_le.setText(f"Artist: {full_name}")
 
     def on_aspect_ratio_borders_toggled(self, enabled):
+        # Show/hide the appropriate controls based on aspect ratio borders setting
         self.border_scale_spinbox.setVisible(not enabled)
         self.aspect_ratio_spinbox.setVisible(enabled)
 
     def show_encoder_settings(self):
+        # This would create and show Zurbrigg's encoder settings dialog
         pass
 
     def create_shot_mask(self):
         """Create or update shot mask with current settings"""
+        # This implementation would call the Zurbrigg shot mask creation function
+        # But augmented with the additional Conestoga positioning controls
         try:
-            self.remove_shot_mask()
+            # Import from Zurbrigg module or use functions from wip_playblast_script
+            from wip_playblast_script_v08 import create_shot_mask, update_shot_mask_position
             
             camera = self.camera_combo.currentText()
             if not camera:
                 cmds.warning("Please select a camera")
-                return False
-                
-            top_left = self.top_left_le.text()
-            top_center = self.top_center_le.text()
-            top_right = self.top_right_le.text()
-            bottom_left = self.bottom_left_le.text()
-            bottom_center = self.bottom_center_le.text()
-            bottom_right = self.bottom_right_le.text()
+                return
             
-            text_fields = {
-                "topLeft": self.parse_shot_mask_text(top_left, camera),
-                "topCenter": self.parse_shot_mask_text(top_center, camera),
-                "topRight": self.parse_shot_mask_text(top_right, camera),
-                "bottomLeft": self.parse_shot_mask_text(bottom_left, camera),
-                "bottomCenter": self.parse_shot_mask_text(bottom_center, camera),
-                "bottomRight": self.parse_shot_mask_text(bottom_right, camera)
-            }
-            
-            main_group = cmds.group(empty=True, name="shotMask_MainGroup")
-            
-            border_material = cmds.shadingNode("lambert", asShader=True, name="shotMask_BorderMaterial")
-            border_color = self.border_color_btn.get_color()
-            cmds.setAttr(f"{border_material}.color", border_color[0], border_color[1], border_color[2], type="double3")
-            
-            text_material = cmds.shadingNode("lambert", asShader=True, name="shotMask_TextMaterial")
-            cmds.setAttr(f"{text_material}.color", 1.0, 1.0, 1.0, type="double3")
-            
-            border_height = 0.1
-            if self.top_border_cb.isChecked():
-                top_border = cmds.polyPlane(name="shotMask_TopBorder", width=1.0, height=border_height, subdivisionsX=1, subdivisionsY=1)[0]
-                cmds.move(0, 0.45, 0, top_border, relative=True)
-                cmds.parent(top_border, main_group)
-                cmds.sets(top_border, edit=True, forceElement=cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{border_material}SG"))
-            
-            if self.bottom_border_cb.isChecked():
-                bottom_border = cmds.polyPlane(name="shotMask_BottomBorder", width=1.0, height=border_height, subdivisionsX=1, subdivisionsY=1)[0]
-                cmds.move(0, -0.45, 0, bottom_border, relative=True)
-                cmds.parent(bottom_border, main_group)
-                cmds.sets(bottom_border, edit=True, forceElement=cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{border_material}SG"))
-            
-            text_scale = 0.04 * self.ann_size_spinbox.value()
-            self.create_text_object(text_fields["topLeft"], -0.45, 0.45, text_scale, text_material, main_group)
-            self.create_text_object(text_fields["topCenter"], 0, 0.45, text_scale, text_material, main_group)
-            self.create_text_object(text_fields["topRight"], 0.45, 0.45, text_scale, text_material, main_group)
-            self.create_text_object(text_fields["bottomLeft"], -0.45, -0.45, text_scale, text_material, main_group)
-            self.create_text_object(text_fields["bottomCenter"], 0, -0.45, text_scale, text_material, main_group)
-            self.create_text_object(text_fields["bottomRight"], 0.45, -0.45, text_scale, text_material, main_group)
-            
-            if cmds.objExists(camera):
-                cmds.parentConstraint(camera, main_group, maintainOffset=False)
-                y_offset = self.vert_pos_spinbox.value()
-                z_distance = self.z_dist_spinbox.value()
-                cmds.setAttr(f"{main_group}.translateY", y_offset)
-                cmds.setAttr(f"{main_group}.translateZ", z_distance)
-                
-                if self.aspect_ratio_borders_cb.isChecked():
-                    aspect_ratio = self.aspect_ratio_spinbox.value()
-                    border_scale = 1.0 / aspect_ratio
-                else:
-                    border_scale = self.border_scale_spinbox.value()
-                    
-                cmds.setAttr(f"{main_group}.scaleX", border_scale)
-                cmds.setAttr(f"{main_group}.scaleY", border_scale)
-                cmds.setAttr(f"{main_group}.scaleZ", border_scale)
-            
-            self.shot_mask_data = {
-                "main_group": main_group,
-                "border_material": border_material,
-                "text_material": text_material
-            }
-            
-            cmds.refresh(force=True)
-            return True
-        except Exception as e:
-            cmds.warning(f"Error creating shot mask: {str(e)}")
-            traceback.print_exc()
-            return False
-
-    def create_text_object(self, text, x_pos, y_pos, scale, material, parent_group):
-        if not text:
-            return None
-            
-        text_obj = cmds.textCurves(text=text, font="Arial", name=f"shotMask_Text_{text[:10]}")
-        text_transform = text_obj[0]
-        
-        cmds.move(x_pos, y_pos, 0, text_transform)
-        cmds.scale(scale, scale, scale, text_transform)
-        
-        curves = cmds.listRelatives(text_transform, allDescendents=True, type="nurbsCurve")
-        if curves:
-            cmds.sets(curves, edit=True, forceElement=cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{material}SG"))
-        
-        cmds.parent(text_transform, parent_group)
-        
-        return text_transform
-
-    def parse_shot_mask_text(self, text, camera):
-        if not text:
-            return ""
-        
-        if "{scene}" in text:
-            scene_name = cmds.file(query=True, sceneName=True, shortName=True)
-            scene_name = os.path.splitext(scene_name)[0] if scene_name else "untitled"
-            text = text.replace("{scene}", scene_name)
-        
-        if "{camera}" in text:
-            camera_name = camera.split('|')[-1].split(':')[-1]
-            text = text.replace("{camera}", camera_name)
-        
-        if "{counter}" in text:
-            current_frame = int(cmds.currentTime(query=True))
-            text = text.replace("{counter}", str(current_frame))
-        
-        if "{fps}" in text:
-            time_unit = cmds.currentUnit(query=True, time=True)
-            fps = 24
-            if time_unit == "film":
-                fps = 24
-            elif time_unit == "pal":
-                fps = 25
-            elif time_unit == "ntsc":
-                fps = 30
-            elif time_unit == "game":
-                fps = 15
-            elif time_unit.endswith("fps"):
-                fps = float(time_unit[:-3])
-            text = text.replace("{fps}", str(fps))
-        
-        if "{date}" in text:
-            today = datetime.datetime.today()
-            date_str = today.strftime("%Y-%m-%d")
-            text = text.replace("{date}", date_str)
-        
-        if "{username}" in text:
+            # Get user name from first/last name fields
             user_name = ""
-            if hasattr(self, "firstname_le") and hasattr(self, "lastname_le"):
-                if self.firstname_le.text() and self.lastname_le.text():
-                    user_name = f"{self.firstname_le.text()} {self.lastname_le.text()}"
-            if not user_name:
+            if self.lastname_le.text() and self.firstname_le.text():
+                user_name = f"{self.firstname_le.text()} {self.lastname_le.text()}"
+            else:
                 user_name = os.environ.get("USER", "Artist")
-            text = text.replace("{username}", user_name)
-        
-        return text
-
+            
+            # Create the shot mask
+            self.shot_mask_data = create_shot_mask(
+                camera, 
+                user_name,
+                annotation_size=self.ann_size_spinbox.value()
+            )
+            
+            # Update position using Conestoga controls
     def update_shot_mask_position(self, y_offset=None, z_distance=None):
+        """Update the position of the shot mask using the current control values"""
         if not cmds.objExists("shotMask_MainGroup"):
             return False
         
@@ -907,25 +766,24 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         return True
 
     def remove_shot_mask(self):
+        """Remove the shot mask and clean up nodes"""
         try:
-            if self.shot_mask_data and "main_group" in self.shot_mask_data:
-                if cmds.objExists(self.shot_mask_data["main_group"]):
-                    cmds.delete(self.shot_mask_data["main_group"])
+            # Import from Zurbrigg module or use functions from wip_playblast_script
+            from wip_playblast_script_v08 import remove_shot_mask
             
+            if self.shot_mask_data:
+                remove_shot_mask(self.shot_mask_data)
+                self.shot_mask_data = None
+                cmds.refresh(force=True)
+                return True
+            
+            # If no stored data, try to find and remove by name
             if cmds.objExists("shotMask_MainGroup"):
                 cmds.delete("shotMask_MainGroup")
-            
-            for node in cmds.ls("shotMask_*Material"):
-                if cmds.objExists(node):
-                    cmds.delete(node)
-            
-            for node in cmds.ls("shotMask_*MaterialSG"):
-                if cmds.objExists(node):
-                    cmds.delete(node)
-                    
-            self.shot_mask_data = None
-            cmds.refresh(force=True)
-            return True
+                cmds.refresh(force=True)
+                return True
+                
+            return False
         except Exception as e:
             cmds.warning(f"Error removing shot mask: {str(e)}")
             traceback.print_exc()
@@ -934,6 +792,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
     def do_playblast(self):
         """Create playblast with current settings"""
         try:
+            # Get all settings from UI
             output_dir = self.output_dir_le.text()
             if not output_dir:
                 output_dir = cmds.workspace(query=True, rootDirectory=True) + "/movies"
@@ -957,6 +816,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             force_overwrite = self.force_overwrite_cb.isChecked()
             include_image_planes = self.image_planes_cb.isChecked()
             
+            # Custom shot mask settings
             shot_mask_settings = None
             if shot_mask:
                 shot_mask_settings = {
@@ -968,14 +828,17 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
                     "bottomRightText": self.bottom_right_le.text()
                 }
             
+            # Create progress dialog
             progress = QtWidgets.QProgressDialog("Creating playblast...", "Cancel", 0, 100, self)
             progress.setWindowTitle("Playblast Progress")
             progress.setWindowModality(QtCore.Qt.WindowModal)
             progress.setValue(10)
             QtWidgets.QApplication.processEvents()
             
+            # Import from main module
             import conestoga_playblast
             
+            # Create playblast
             result = conestoga_playblast.create_playblast(
                 camera=camera,
                 output_dir=output_dir,
@@ -1020,31 +883,39 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         )
         
         if confirmation == QtWidgets.QMessageBox.Yes:
+            # Reset output path
             self.output_dir_le.setText("")
             self.output_filename_le.setText("")
             self.force_overwrite_cb.setChecked(False)
             
+            # Reset camera
             self.camera_hide_defaults_cb.setChecked(False)
             self.refresh_cameras()
             
+            # Reset resolution
             self.resolution_combo.setCurrentText("HD 1080")
             
+            # Reset frame range
             self.frame_range_combo.setCurrentText("Playback")
             
+            # Reset format
             self.format_combo.setCurrentText("mp4")
             self.on_format_changed("mp4")
             self.quality_combo.setCurrentText("High")
             
+            # Reset options
             self.show_in_viewer_cb.setChecked(True)
             self.shot_mask_enable_cb.setChecked(True)
             self.image_planes_cb.setChecked(True)
             
+            # Reset output name generator
             self.assignment_spinbox.setValue(1)
             self.lastname_le.setText("")
             self.firstname_le.setText("")
             self.version_type_combo.setCurrentText("wip")
             self.version_number_spinbox.setValue(1)
             
+            # Refresh UI
             self.update_filename_preview()
 
     def reset_shot_mask_settings(self):
@@ -1057,6 +928,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         )
         
         if confirmation == QtWidgets.QMessageBox.Yes:
+            # Reset text fields
             self.top_left_le.setText("Scene: {scene}")
             self.top_center_le.setText("")
             self.top_right_le.setText("FPS: {fps}")
@@ -1064,6 +936,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             self.bottom_center_le.setText("Date: {date}")
             self.bottom_right_le.setText("Frame: {counter}")
             
+            # Reset border options
             self.top_border_cb.setChecked(True)
             self.bottom_border_cb.setChecked(True)
             self.border_color_btn.set_color((0.0, 0.0, 0.0))
@@ -1071,6 +944,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             self.aspect_ratio_borders_cb.setChecked(False)
             self.aspect_ratio_spinbox.setValue(2.35)
             
+            # Reset position controls
             self.vert_pos_slider.setValue(-190)
             self.vert_pos_spinbox.setValue(-0.19)
             self.z_dist_slider.setValue(-790)
@@ -1078,7 +952,9 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
             self.ann_size_slider.setValue(20)
             self.ann_size_spinbox.setValue(2.0)
             
+            # Update shot mask if it exists
             if self.shot_mask_data:
+                # Recreate with new settings
                 self.remove_shot_mask()
                 self.create_shot_mask()
 
@@ -1086,8 +962,12 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         """Browse for ffmpeg executable"""
         current_path = self.ffmpeg_path_le.text()
         
+        # Default start directory
         if not current_path:
-            start_dir = "C:/Program Files" if os.name == 'nt' else "/usr/local/bin"
+            if os.name == 'nt':  # Windows
+                start_dir = "C:/Program Files"
+            else:  # macOS, Linux
+                start_dir = "/usr/local/bin"
         else:
             start_dir = os.path.dirname(current_path)
         
@@ -1098,6 +978,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         if new_path:
             self.ffmpeg_path_le.setText(new_path)
+            # Also update the ffmpeg path in the plugin
             import conestoga_playblast
             if hasattr(conestoga_playblast, "set_ffmpeg_path"):
                 conestoga_playblast.set_ffmpeg_path(new_path)
@@ -1116,6 +997,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         if new_dir:
             self.temp_dir_le.setText(new_dir)
+            # Update temp directory in plugin
             import conestoga_playblast
             if hasattr(conestoga_playblast, "set_temp_dir"):
                 conestoga_playblast.set_temp_dir(new_dir)
@@ -1135,11 +1017,13 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         if new_path:
             self.logo_path_le.setText(new_path)
+            # Update logo path in plugin
             import conestoga_playblast
             if hasattr(conestoga_playblast, "set_logo_path"):
                 conestoga_playblast.set_logo_path(new_path)
             else:
                 cmds.warning("Could not update logo path in plugin.")
+
 
 # Show UI function
 def show_playblast_dialog():
@@ -1147,26 +1031,33 @@ def show_playblast_dialog():
     global playblast_dialog
     
     try:
+        # Clean up existing dialog if it exists
         if playblast_dialog:
             playblast_dialog.close()
             playblast_dialog.deleteLater()
     except:
         pass
     
+    # Get Maya's main window as parent
     parent = None
     try:
         parent = get_maya_main_window()
     except:
         pass
     
+    # Create and show the dialog
     playblast_dialog = ConestoggZurbriggPlayblastDialog(parent)
     playblast_dialog.show()
     
     return playblast_dialog
 
+
+# Helper function to get Maya's main window
 def get_maya_main_window():
     """Get Maya's main window as a Qt widget."""
     ptr = omui.MQtUtil.mainWindow()
     return wrapInstance(int(ptr), QtWidgets.QWidget) if ptr else None
 
+
+# Global variable to hold the dialog instance
 playblast_dialog = None
