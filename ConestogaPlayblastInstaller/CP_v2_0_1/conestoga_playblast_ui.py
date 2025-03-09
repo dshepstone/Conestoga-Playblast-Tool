@@ -1440,6 +1440,7 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         self.cancel_btn.clicked.connect(self.close)
 
 
+
     def set_page(self, page):
         if not page in ConestogaPlayblastEncoderSettingsDialog.ENCODER_PAGES:
             return False
@@ -2709,30 +2710,40 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
             label_le.editingFinished.connect(self.update_mask)
 
         self.font_select_btn.clicked.connect(self.show_font_select_dialog)
-        self.label_color_btn.color_changed.connect(self.update_mask)  # pylint: disable=E1101
+        self.label_color_btn.color_changed.connect(self.update_mask)
         self.label_transparency_dsb.valueChanged.connect(self.update_mask)
         self.label_scale_dsb.valueChanged.connect(self.update_mask)
 
         self.top_border_cb.toggled.connect(self.update_mask)
         self.bottom_border_cb.toggled.connect(self.update_mask)
         self.frame_border_to_aspect_ratio_cb.toggled.connect(self.on_border_aspect_ratio_enabled_changed)
-        self.border_color_btn.color_changed.connect(self.update_mask)  # pylint: disable=E1101
+        self.border_color_btn.color_changed.connect(self.update_mask)
         self.border_transparency_dsb.valueChanged.connect(self.update_mask)
         self.border_scale_dsb.valueChanged.connect(self.update_mask)
         self.border_aspect_ratio_dsb.editingFinished.connect(self.update_mask)
 
         self.counter_padding_sb.valueChanged.connect(self.update_mask)
 
-        self.labels_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.text_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.borders_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.counter_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
+        self.labels_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.text_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.borders_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.counter_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
 
     def refresh_cameras(self):
-
         cameras = cmds.listCameras()
         cameras.insert(0, ConestogaShotMaskWidget.ALL_CAMERAS)
 
+    def on_border_aspect_ratio_enabled_changed(self):
+        enabled = self.frame_border_to_aspect_ratio_cb.isChecked()
+        if enabled:
+            self.border_size_type_text.setText("Aspect Ratio")
+        else:
+            self.border_size_type_text.setText("Scale")
+
+        self.border_aspect_ratio_dsb.setVisible(enabled)
+        self.border_scale_dsb.setHidden(enabled)
+
+        self.update_mask()
 
     def create_mask(self):
         ConestogaShotMask.create_mask()
@@ -2834,9 +2845,42 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         selected = self._camera_select_dialog.get_selected()
         if selected:
             self.camera_le.setText(selected[0])
-
             self.update_mask()
 
+    def on_collapsed_state_changed(self):
+        self.collapsed_state_changed.emit()
+
+    def get_collapsed_states(self):
+        collapsed = 0
+        collapsed += int(self.labels_grp.is_collapsed())
+        collapsed += int(self.text_grp.is_collapsed()) << 1
+        collapsed += int(self.borders_grp.is_collapsed()) << 2
+        collapsed += int(self.counter_grp.is_collapsed()) << 3
+
+        return collapsed
+
+    def set_collapsed_states(self, collapsed):
+        self.labels_grp.set_collapsed(collapsed & 1)
+        self.text_grp.set_collapsed(collapsed & 2)
+        self.borders_grp.set_collapsed(collapsed & 4)
+        self.counter_grp.set_collapsed(collapsed & 8)
+
+    def show_font_select_dialog(self):
+        current_font = QtGui.QFont(self.font_le.text())
+
+        font = QtWidgets.QFontDialog.getFont(current_font, self)
+
+        # Order of the tuple returned by getFont changed in newer versions of Qt
+        if type(font[0]) == bool:
+            ok = font[0]
+            family = font[1].family()
+        else:
+            family = font[0].family()
+            ok = font[1]
+
+        if(ok):
+            self.font_le.setText(family)
+            self.update_mask()
 
 class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
@@ -3211,13 +3255,13 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         main_layout.addLayout(status_bar_layout)
 
     def create_connections(self):
-        self.settings_wdg.playblast_reset.connect(self.playblast_wdg.reset_settings)  # pylint: disable=E1101
-        self.settings_wdg.logo_path_updated.connect(self.shot_mask_wdg.update_mask)  # pylint: disable=E1101
-        self.settings_wdg.shot_mask_reset.connect(self.shot_mask_wdg.reset_settings)  # pylint: disable=E1101
+        self.settings_wdg.playblast_reset.connect(self.playblast_wdg.reset_settings)
+        self.settings_wdg.logo_path_updated.connect(self.shot_mask_wdg.update_mask)
+        self.settings_wdg.shot_mask_reset.connect(self.shot_mask_wdg.reset_settings)
 
-        self.playblast_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.shot_mask_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.settings_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
+        self.playblast_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.shot_mask_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.settings_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
 
         self.toggle_mask_btn.clicked.connect(self.shot_mask_wdg.toggle_mask)
         self.playblast_btn.clicked.connect(self.playblast_wdg.do_playblast)
@@ -3294,21 +3338,6 @@ if __name__ == "__main__":
             cmds.deleteUI(workspace_control_name)
 
         cstg_test_ui = ConestogaPlayblastUi()
-
-    def on_border_aspect_ratio_enabled_changed(self):
-        enabled = self.frame_border_to_aspect_ratio_cb.isChecked()
-        if enabled:
-            self.border_size_type_text.setText("Aspect Ratio")
-        else:
-            self.border_size_type_text.setText("Scale")
-
-        self.border_aspect_ratio_dsb.setVisible(enabled)
-        self.border_scale_dsb.setHidden(enabled)
-
-        self.update_mask()
-
-    def on_collapsed_state_changed(self):
-        self.collapsed_state_changed.emit()  # pylint: disable=E1101
 
     def get_collapsed_states(self):
         collapsed = 0

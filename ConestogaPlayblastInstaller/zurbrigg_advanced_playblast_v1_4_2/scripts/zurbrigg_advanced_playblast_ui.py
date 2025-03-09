@@ -1,14 +1,14 @@
 ###############################################################################
 # Name:
-#   conestoga_playblast_ui.py
+#   zurbrigg_advanced_playblast_ui.py
 #
 # Author:
-#   Conestoga College
+#   Chris Zurbrigg (http://zurbrigg.com)
 #
 # Usage:
-#   Launch the Conestoga Playblast UI
+#   Visit http://zurbrigg.com for details
 #
-# Copyright (C) 2025 Conestoga College. All rights reserved.
+# Copyright (C) 2024 Chris Zurbrigg. All rights reserved.
 ###############################################################################
 
 import copy
@@ -37,12 +37,12 @@ import maya.mel as mel
 import maya.api.OpenMaya as om
 import maya.OpenMayaUI as omui
 
-from conestoga_playblast_presets import ConestogaPlayblastCustomPresets, ConestogaShotMaskCustomPresets
+from zurbrigg_advanced_playblast_presets import ZurbriggPlayblastCustomPresets, ZurbriggShotMaskCustomPresets
 
 
-class ConestogaPlayblastUtils(object):
+class ZurbriggAdvancedPlayblastUtils(object):
 
-    PLUG_IN_NAME = "conestoga_playblast.py"
+    PLUG_IN_NAME = "zurbrigg_advanced_playblast.py"
 
 
     @classmethod
@@ -55,62 +55,62 @@ class ConestogaPlayblastUtils(object):
             try:
                 cmds.loadPlugin(cls.PLUG_IN_NAME)
             except:
-                om.MGlobal.displayError("Failed to load Conestoga Playblast plug-in: {0}".format(cls.PLUG_IN_NAME))
+                om.MGlobal.displayError("Failed to load Zurbrigg Advanced Playblast plug-in: {0}".format(cls.PLUG_IN_NAME))
                 return
 
         return True
 
     @classmethod
     def get_version(cls):
-        return cmds.ConestogaPlayblast(v=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(v=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_ffmpeg_path(cls):
-        return cmds.ConestogaPlayblast(q=True, fp=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(q=True, fp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_ffmpeg_path(cls, path):
-        cmds.ConestogaPlayblast(e=True, fp=path)  # pylint: disable=E1101
+        cmds.ZurbriggAP(e=True, fp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_ffmpeg_env_var_set(cls):
-        return cmds.ConestogaPlayblast(fev=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(fev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_temp_output_dir_path(self):
-        return cmds.ConestogaPlayblast(q=True, tp=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(q=True, tp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_temp_output_dir_path(self, path):
-        cmds.ConestogaPlayblast(e=True, tp=path)  # pylint: disable=E1101
+        cmds.ZurbriggAP(e=True, tp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_temp_output_env_var_set(cls):
-        return cmds.ConestogaPlayblast(tev=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(tev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_temp_file_format(self):
-        return cmds.ConestogaPlayblast(q=True, tf=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(q=True, tf=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_temp_file_format(self, file_format):
-        cmds.ConestogaPlayblast(e=True, tf=file_format)  # pylint: disable=E1101
+        cmds.ZurbriggAP(e=True, tf=file_format)  # pylint: disable=E1101
 
     @classmethod
     def is_temp_format_env_set(cls):
-        return cmds.ConestogaPlayblast(tfe=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(tfe=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_logo_path(cls):
-        return cmds.ConestogaPlayblast(q=True, lp=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(q=True, lp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_logo_path(cls, path):
-        cmds.ConestogaPlayblast(e=True, lp=path)  # pylint: disable=E1101
+        cmds.ZurbriggAP(e=True, lp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_logo_env_var_set(cls):
-        return cmds.ConestogaPlayblast(lev=True)[0]  # pylint: disable=E1101
+        return cmds.ZurbriggAP(lev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def cameras_in_scene(cls, include_defaults=True, user_created_first=True):
@@ -150,12 +150,12 @@ class ConestogaPlayblastUtils(object):
         return scale_value
 
 
-class ConestogaCollapsibleGrpHeader(QtWidgets.QWidget):
+class ZurbriggCollapsibleGrpHeader(QtWidgets.QWidget):
 
     clicked = QtCore.Signal()
 
     def __init__(self, text, parent=None):
-        super(ConestogaCollapsibleGrpHeader, self).__init__(parent)
+        super(ZurbriggCollapsibleGrpHeader, self).__init__(parent)
 
         self.setAutoFillBackground(True)
         self.set_background_color(None)
@@ -207,17 +207,17 @@ class ConestogaCollapsibleGrpHeader(QtWidgets.QWidget):
         self.clicked.emit()  # pylint: disable=E1101
 
 
-class ConestogaCollapsibleGrpWidget(QtWidgets.QWidget):
+class ZurbriggCollapsibleGrpWidget(QtWidgets.QWidget):
 
     collapsed_state_changed = QtCore.Signal()
 
     def __init__(self, text, parent=None):
-        super(ConestogaCollapsibleGrpWidget, self).__init__(parent)
+        super(ZurbriggCollapsibleGrpWidget, self).__init__(parent)
 
         self.append_stretch_on_collapse = False
         self.stretch_appended = False
 
-        self.header_wdg = ConestogaCollapsibleGrpHeader(text)
+        self.header_wdg = ZurbriggCollapsibleGrpHeader(text)
         self.header_wdg.clicked.connect(self.on_header_clicked)  # pylint: disable=E1101
 
         self.body_wdg = QtWidgets.QWidget()
@@ -276,15 +276,15 @@ class ConestogaCollapsibleGrpWidget(QtWidgets.QWidget):
         self.collapsed_state_changed.emit()  # pylint: disable=E1101
 
 
-class ConestogaColorButton(QtWidgets.QWidget):
+class ZurbriggColorButton(QtWidgets.QWidget):
 
     color_changed = QtCore.Signal()
 
 
     def __init__(self, color=(1.0, 1.0, 1.0), parent=None):
-        super(ConestogaColorButton, self).__init__(parent)
+        super(ZurbriggColorButton, self).__init__(parent)
 
-        self.setObjectName("ConestogaColorButton")
+        self.setObjectName("ZurbriggColorButton")
 
         self.create_control()
 
@@ -325,7 +325,7 @@ class ConestogaColorButton(QtWidgets.QWidget):
             return omui.MQtUtil.fullName(long(self._color_slider_obj))  # pylint: disable=E0602
 
     def set_size(self, width, height):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        scale_value = ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()
 
         self._color_slider_widget.setFixedWidth(int(width * scale_value))
         self._color_widget.setFixedHeight(int(height * scale_value))
@@ -341,7 +341,7 @@ class ConestogaColorButton(QtWidgets.QWidget):
         self.color_changed.emit()  # pylint: disable=E1101
 
 
-class ConestogaLineEdit(QtWidgets.QLineEdit):
+class ZurbriggLineEdit(QtWidgets.QLineEdit):
 
     TYPE_PLAYBLAST_OUTPUT_PATH = 0
     TYPE_PLAYBLAST_OUTPUT_FILENAME = 1
@@ -370,7 +370,7 @@ class ConestogaLineEdit(QtWidgets.QLineEdit):
     ]
 
     def __init__(self, le_type, parent=None):
-        super(ConestogaLineEdit, self).__init__(parent)
+        super(ZurbriggLineEdit, self).__init__(parent)
 
         self.le_type = le_type
 
@@ -387,15 +387,15 @@ class ConestogaLineEdit(QtWidgets.QLineEdit):
         context_menu.addSeparator()
 
         lookup = []
-        if self.le_type == ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH:
-            lookup.extend(ConestogaLineEdit.PLAYBLAST_OUTPUT_PATH_LOOKUP)
-            lookup.extend(ConestogaPlayblastCustomPresets.PLAYBLAST_OUTPUT_PATH_LOOKUP)
-        elif self.le_type == ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME:
-            lookup.extend(ConestogaLineEdit.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
-            lookup.extend(ConestogaPlayblastCustomPresets.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
-        elif self.le_type == ConestogaLineEdit.TYPE_SHOT_MASK_LABEL:
-            lookup.extend(ConestogaLineEdit.SHOT_MASK_LABEL_LOOKUP)
-            lookup.extend(ConestogaShotMaskCustomPresets.SHOT_MASK_LABEL_LOOKUP)
+        if self.le_type == ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH:
+            lookup.extend(ZurbriggLineEdit.PLAYBLAST_OUTPUT_PATH_LOOKUP)
+            lookup.extend(ZurbriggPlayblastCustomPresets.PLAYBLAST_OUTPUT_PATH_LOOKUP)
+        elif self.le_type == ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME:
+            lookup.extend(ZurbriggLineEdit.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
+            lookup.extend(ZurbriggPlayblastCustomPresets.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
+        elif self.le_type == ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL:
+            lookup.extend(ZurbriggLineEdit.SHOT_MASK_LABEL_LOOKUP)
+            lookup.extend(ZurbriggShotMaskCustomPresets.SHOT_MASK_LABEL_LOOKUP)
 
         for item in lookup:
             action = context_menu.addAction(item[0])
@@ -408,10 +408,10 @@ class ConestogaLineEdit(QtWidgets.QLineEdit):
         self.insert(self.sender().data())
 
 
-class ConestogaFormLayout(QtWidgets.QGridLayout):
+class ZurbriggFormLayout(QtWidgets.QGridLayout):
 
     def __init__(self, parent=None):
-        super(ConestogaFormLayout, self).__init__(parent)
+        super(ZurbriggFormLayout, self).__init__(parent)
 
         self.setContentsMargins(0, 0, 0, 8)
         self.setColumnMinimumWidth(0, 80)
@@ -426,10 +426,11 @@ class ConestogaFormLayout(QtWidgets.QGridLayout):
         self.addLayout(layout, row, 1)
 
 
-class ConestogaCameraSelectDialog(QtWidgets.QDialog):
+
+class ZurbriggCameraSelectDialog(QtWidgets.QDialog):
 
     def __init__(self, parent):
-        super(ConestogaCameraSelectDialog, self).__init__(parent)
+        super(ZurbriggCameraSelectDialog, self).__init__(parent)
 
         self.setWindowTitle("Camera Select")
         # self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
@@ -478,7 +479,7 @@ class ConestogaCameraSelectDialog(QtWidgets.QDialog):
         if prepend:
             self.camera_list_wdg.addItems(prepend)
 
-        self.camera_list_wdg.addItems(ConestogaPlayblastUtils.cameras_in_scene(include_defaults, user_created_first))
+        self.camera_list_wdg.addItems(ZurbriggAdvancedPlayblastUtils.cameras_in_scene(include_defaults, user_created_first))
 
         if append:
             self.camera_list_wdg.addItems(append)
@@ -499,7 +500,7 @@ class ConestogaCameraSelectDialog(QtWidgets.QDialog):
         return selected
 
 
-class ConestogaWorkspaceControl(object):
+class ZurbriggWorkspaceControl(object):
 
     def __init__(self, name):
         self.name = name
@@ -554,7 +555,7 @@ class ConestogaWorkspaceControl(object):
         return cmds.workspaceControl(self.name, q=True, collapse=True)
 
 
-class ConestogaPlayblast(QtCore.QObject):
+class ZurbriggPlayblast(QtCore.QObject):
 
     DEFAULT_FFMPEG_PATH = ""
 
@@ -658,21 +659,21 @@ class ConestogaPlayblast(QtCore.QObject):
 
 
     def __init__(self):
-        super(ConestogaPlayblast, self).__init__()
+        super(ZurbriggPlayblast, self).__init__()
 
-        self.set_maya_logging_enabled(ConestogaPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
+        self.set_maya_logging_enabled(ZurbriggPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
 
         self.build_presets()
 
-        self.set_camera(ConestogaPlayblast.DEFAULT_CAMERA)
-        self.set_resolution(ConestogaPlayblast.DEFAULT_RESOLUTION)
-        self.set_frame_range(ConestogaPlayblast.DEFAULT_FRAME_RANGE)
+        self.set_camera(ZurbriggPlayblast.DEFAULT_CAMERA)
+        self.set_resolution(ZurbriggPlayblast.DEFAULT_RESOLUTION)
+        self.set_frame_range(ZurbriggPlayblast.DEFAULT_FRAME_RANGE)
 
-        self.set_encoding(ConestogaPlayblast.DEFAULT_CONTAINER, ConestogaPlayblast.DEFAULT_ENCODER)
-        self.set_h264_settings(ConestogaPlayblast.DEFAULT_H264_QUALITY, ConestogaPlayblast.DEFAULT_H264_PRESET)
-        self.set_image_settings(ConestogaPlayblast.DEFAULT_IMAGE_QUALITY)
+        self.set_encoding(ZurbriggPlayblast.DEFAULT_CONTAINER, ZurbriggPlayblast.DEFAULT_ENCODER)
+        self.set_h264_settings(ZurbriggPlayblast.DEFAULT_H264_QUALITY, ZurbriggPlayblast.DEFAULT_H264_PRESET)
+        self.set_image_settings(ZurbriggPlayblast.DEFAULT_IMAGE_QUALITY)
 
-        self.set_visibility(ConestogaPlayblast.DEFAULT_VISIBILITY)
+        self.set_visibility(ZurbriggPlayblast.DEFAULT_VISIBILITY)
 
         self.initialize_ffmpeg_process()
 
@@ -680,12 +681,12 @@ class ConestogaPlayblast(QtCore.QObject):
         self.resolution_preset_names = []
         self.resolution_presets = {}
 
-        for preset in ConestogaPlayblast.RESOLUTION_PRESETS:
+        for preset in ZurbriggPlayblast.RESOLUTION_PRESETS:
             self.resolution_preset_names.append(preset[0])
             self.resolution_presets[preset[0]] = preset[1]
 
         try:
-            for preset in ConestogaPlayblastCustomPresets.RESOLUTION_PRESETS:
+            for preset in ZurbriggPlayblastCustomPresets.RESOLUTION_PRESETS:
                 self.resolution_preset_names.append(preset[0])
                 self.resolution_presets[preset[0]] = preset[1]
         except:
@@ -695,12 +696,12 @@ class ConestogaPlayblast(QtCore.QObject):
         self.viewport_visibility_preset_names = []
         self.viewport_visibility_presets = {}
 
-        for preset in ConestogaPlayblast.VIEWPORT_VISIBILITY_PRESETS:
+        for preset in ZurbriggPlayblast.VIEWPORT_VISIBILITY_PRESETS:
             self.viewport_visibility_preset_names.append(preset[0])
             self.viewport_visibility_presets[preset[0]] = preset[1]
 
         try:
-            for preset in ConestogaPlayblastCustomPresets.VIEWPORT_VISIBILITY_PRESETS:
+            for preset in ZurbriggPlayblastCustomPresets.VIEWPORT_VISIBILITY_PRESETS:
                 self.viewport_visibility_preset_names.append(preset[0])
                 self.viewport_visibility_presets[preset[0]] = preset[1]
 
@@ -769,7 +770,7 @@ class ConestogaPlayblast(QtCore.QObject):
             return
 
         self._frame_range_preset = None
-        if frame_range in ConestogaPlayblast.FRAME_RANGE_PRESETS:
+        if frame_range in ZurbriggPlayblast.FRAME_RANGE_PRESETS:
             self._frame_range_preset = frame_range
 
         self._start_frame = resolved_frame_range[0]
@@ -793,7 +794,7 @@ class ConestogaPlayblast(QtCore.QObject):
 
         except:
             presets = []
-            for preset in ConestogaPlayblast.FRAME_RANGE_PRESETS:
+            for preset in ZurbriggPlayblast.FRAME_RANGE_PRESETS:
                 presets.append("'{0}'".format(preset))
             self.log_error('Invalid frame range. Expected one of (start_frame, end_frame), {0}'.format(", ".join(presets)))
 
@@ -847,7 +848,7 @@ class ConestogaPlayblast(QtCore.QObject):
 
         preset_names = self.viewport_visibility_presets[visibility_preset_name]
         if preset_names:
-            for lookup_item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+            for lookup_item in ZurbriggPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
                 visibility_data.append(lookup_item[0] in preset_names)
 
         return visibility_data
@@ -859,7 +860,7 @@ class ConestogaPlayblast(QtCore.QObject):
 
         viewport_visibility = []
         try:
-            for item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+            for item in ZurbriggPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
                 kwargs = {item[1]: True}
                 viewport_visibility.append(cmds.modelEditor(model_panel, q=True, **kwargs))
         except:
@@ -876,31 +877,31 @@ class ConestogaPlayblast(QtCore.QObject):
         visibility_flags = {}
 
         data_index = 0
-        for item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+        for item in ZurbriggPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
             visibility_flags[item[1]] = visibility_data[data_index]
             data_index += 1
 
         return visibility_flags
 
     def set_encoding(self, container_format, encoder):
-        if container_format not in ConestogaPlayblast.VIDEO_ENCODER_LOOKUP.keys():
-            self.log_error("Invalid container: {0}. Expected one of {1}".format(container_format, ConestogaPlayblast.VIDEO_ENCODER_LOOKUP.keys()))
+        if container_format not in ZurbriggPlayblast.VIDEO_ENCODER_LOOKUP.keys():
+            self.log_error("Invalid container: {0}. Expected one of {1}".format(container_format, ZurbriggPlayblast.VIDEO_ENCODER_LOOKUP.keys()))
             return
 
-        if encoder not in ConestogaPlayblast.VIDEO_ENCODER_LOOKUP[container_format]:
-            self.log_error("Invalid encoder: {0}. Expected one of {1}".format(encoder, ConestogaPlayblast.VIDEO_ENCODER_LOOKUP[container_format]))
+        if encoder not in ZurbriggPlayblast.VIDEO_ENCODER_LOOKUP[container_format]:
+            self.log_error("Invalid encoder: {0}. Expected one of {1}".format(encoder, ZurbriggPlayblast.VIDEO_ENCODER_LOOKUP[container_format]))
             return
 
         self._container_format = container_format
         self._encoder = encoder
 
     def set_h264_settings(self, quality, preset):
-        if not quality in ConestogaPlayblast.H264_QUALITIES.keys():
-            self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, ConestogaPlayblast.H264_QUALITIES.keys()))
+        if not quality in ZurbriggPlayblast.H264_QUALITIES.keys():
+            self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, ZurbriggPlayblast.H264_QUALITIES.keys()))
             return
 
-        if not preset in ConestogaPlayblast.H264_PRESETS:
-            self.log_error("Invalid h264 preset: {0}. Expected one of {1}".format(preset, ConestogaPlayblast.H264_PRESETS))
+        if not preset in ZurbriggPlayblast.H264_PRESETS:
+            self.log_error("Invalid h264 preset: {0}. Expected one of {1}".format(preset, ZurbriggPlayblast.H264_PRESETS))
             return
 
         self._h264_quality = quality
@@ -925,12 +926,12 @@ class ConestogaPlayblast(QtCore.QObject):
 
     def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False):
 
-        ffmpeg_path = ConestogaPlayblastUtils.get_ffmpeg_path()
+        ffmpeg_path = ZurbriggAdvancedPlayblastUtils.get_ffmpeg_path()
         if self.requires_ffmpeg() and not self.validate_ffmpeg(ffmpeg_path):
             self.log_error("ffmpeg executable is not configured. See script editor for details.")
             return
 
-        temp_file_format = ConestogaPlayblastUtils.get_temp_file_format()
+        temp_file_format = ZurbriggAdvancedPlayblastUtils.get_temp_file_format()
         temp_file_is_movie = temp_file_format == "movie"
 
         if temp_file_is_movie:
@@ -972,7 +973,7 @@ class ConestogaPlayblast(QtCore.QObject):
         filename = self.resolve_output_filename(filename, camera)
 
         if padding <= 0:
-            padding = ConestogaPlayblast.DEFAULT_PADDING
+            padding = ZurbriggPlayblast.DEFAULT_PADDING
 
         if self.requires_ffmpeg():
             output_path = os.path.normpath(os.path.join(output_dir, "{0}.{1}".format(filename, self._container_format)))
@@ -1007,17 +1008,17 @@ class ConestogaPlayblast(QtCore.QObject):
         start_frame, end_frame = self.get_start_end_frame()
 
         if enable_camera_frame_range:
-            if cmds.attributeQuery(ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR, node=camera, exists=True) and cmds.attributeQuery(ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR, node=camera, exists=True):
+            if cmds.attributeQuery(ZurbriggPlayblast.CAMERA_PLAYBLAST_START_ATTR, node=camera, exists=True) and cmds.attributeQuery(ZurbriggPlayblast.CAMERA_PLAYBLAST_END_ATTR, node=camera, exists=True):
                 try:
-                    start_frame = int(cmds.getAttr("{0}.{1}".format(camera, ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR)))
-                    end_frame = int(cmds.getAttr("{0}.{1}".format(camera, ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR)))
+                    start_frame = int(cmds.getAttr("{0}.{1}".format(camera, ZurbriggPlayblast.CAMERA_PLAYBLAST_START_ATTR)))
+                    end_frame = int(cmds.getAttr("{0}.{1}".format(camera, ZurbriggPlayblast.CAMERA_PLAYBLAST_END_ATTR)))
 
                     self.log_output("Camera frame range enabled for '{0}' camera: ({1}, {2})\n".format(camera, start_frame, end_frame))
                 except:
                     self.log_warning("Camera frame range disabled. Invalid attribute type(s) on '{0}' camera (expected integer or float). Defaulting to Playback range.\n".format(camera))
 
             else:
-                self.log_warning("Camera frame range disabled. Attributes '{0}' and '{1}' do not exist on '{2}' camera. Defaulting to Playback range.\n".format(ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR, ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR, camera))
+                self.log_warning("Camera frame range disabled. Attributes '{0}' and '{1}' do not exist on '{2}' camera. Defaulting to Playback range.\n".format(ZurbriggPlayblast.CAMERA_PLAYBLAST_START_ATTR, ZurbriggPlayblast.CAMERA_PLAYBLAST_END_ATTR, camera))
 
         if start_frame > end_frame:
             self.log_error("Invalid frame range. The start frame ({0}) is greater than the end frame ({1}).".format(start_frame, end_frame))
@@ -1182,7 +1183,7 @@ class ConestogaPlayblast(QtCore.QObject):
         if audio_file_path:
             audio_offset = self.get_audio_offset_in_sec(start_frame, audio_frame_offset, framerate)
 
-        crf = ConestogaPlayblast.H264_QUALITIES[self._h264_quality]
+        crf = ZurbriggPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
 
         arguments = []
@@ -1207,7 +1208,7 @@ class ConestogaPlayblast(QtCore.QObject):
         self.log_output("Starting h264 transcoding...")
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
-        crf = ConestogaPlayblast.H264_QUALITIES[self._h264_quality]
+        crf = ZurbriggPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
 
         arguments = []
@@ -1270,12 +1271,12 @@ class ConestogaPlayblast(QtCore.QObject):
         return (start_frame - audio_frame_offset) / frame_rate
 
     def resolve_output_directory_path(self, dir_path):
-        dir_path = ConestogaPlayblastCustomPresets.parse_playblast_output_dir_path(dir_path)
+        dir_path = ZurbriggPlayblastCustomPresets.parse_playblast_output_dir_path(dir_path)
 
         if "{project}" in dir_path:
             dir_path = dir_path.replace("{project}", self.get_project_dir_path())
         if "{temp}" in dir_path:
-            temp_dir_path = ConestogaPlayblastUtils.get_temp_output_dir_path()
+            temp_dir_path = ZurbriggAdvancedPlayblastUtils.get_temp_output_dir_path()
 
             if not temp_dir_path:
                 self.log_warning("The {temp} directory path is not set")
@@ -1285,7 +1286,7 @@ class ConestogaPlayblast(QtCore.QObject):
         return dir_path
 
     def resolve_output_filename(self, filename, camera):
-        filename = ConestogaPlayblastCustomPresets.parse_playblast_output_filename(filename)
+        filename = ZurbriggPlayblastCustomPresets.parse_playblast_output_filename(filename)
 
         if "{scene}" in filename:
             filename = filename.replace("{scene}", self.get_scene_name())
@@ -1344,13 +1345,13 @@ class ConestogaPlayblast(QtCore.QObject):
 
     def log_error(self, text):
         if self._log_to_maya:
-            om.MGlobal.displayError("[ConestogaPlayblast] {0}".format(text))
+            om.MGlobal.displayError("[ZurbriggPlayblast] {0}".format(text))
 
         self.output_logged.emit("[ERROR] {0}".format(text))  # pylint: disable=E1101
 
     def log_warning(self, text):
         if self._log_to_maya:
-            om.MGlobal.displayWarning("[ConestogaPlayblast] {0}".format(text))
+            om.MGlobal.displayWarning("[ZurbriggPlayblast] {0}".format(text))
 
         self.output_logged.emit("[WARNING] {0}".format(text))  # pylint: disable=E1101
 
@@ -1361,7 +1362,7 @@ class ConestogaPlayblast(QtCore.QObject):
         self.output_logged.emit(text)  # pylint: disable=E1101
 
 
-class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
+class ZurbriggPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
 
     ENCODER_PAGES = {
         "h264": 0,
@@ -1377,7 +1378,7 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
 
 
     def __init__(self, parent):
-        super(ConestogaPlayblastEncoderSettingsDialog, self).__init__(parent)
+        super(ZurbriggPlayblastEncoderSettingsDialog, self).__init__(parent)
 
         self.setWindowTitle("Encoder Settings")
         self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
@@ -1391,10 +1392,10 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
     def create_widgets(self):
         # h264
         self.h264_quality_combo = QtWidgets.QComboBox()
-        self.h264_quality_combo.addItems(ConestogaPlayblastEncoderSettingsDialog.H264_QUALITIES)
+        self.h264_quality_combo.addItems(ZurbriggPlayblastEncoderSettingsDialog.H264_QUALITIES)
 
         self.h264_preset_combo = QtWidgets.QComboBox()
-        self.h264_preset_combo.addItems(ConestogaPlayblast.H264_PRESETS)
+        self.h264_preset_combo.addItems(ZurbriggPlayblast.H264_PRESETS)
 
         h264_layout = QtWidgets.QFormLayout()
         h264_layout.addRow("Quality:", self.h264_quality_combo)
@@ -1441,10 +1442,10 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
 
 
     def set_page(self, page):
-        if not page in ConestogaPlayblastEncoderSettingsDialog.ENCODER_PAGES:
+        if not page in ZurbriggPlayblastEncoderSettingsDialog.ENCODER_PAGES:
             return False
 
-        self.settings_stacked_wdg.setCurrentIndex(ConestogaPlayblastEncoderSettingsDialog.ENCODER_PAGES[page])
+        self.settings_stacked_wdg.setCurrentIndex(ZurbriggPlayblastEncoderSettingsDialog.ENCODER_PAGES[page])
         return True
 
     def set_h264_settings(self, quality, preset):
@@ -1466,10 +1467,10 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         }
 
 
-class ConestogaPlayblastVisibilityDialog(QtWidgets.QDialog):
+class ZurbriggPlayblastVisibilityDialog(QtWidgets.QDialog):
 
     def __init__(self, parent):
-        super(ConestogaPlayblastVisibilityDialog, self).__init__(parent)
+        super(ZurbriggPlayblastVisibilityDialog, self).__init__(parent)
 
         self.setWindowTitle("Customize Visibility")
         self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
@@ -1480,8 +1481,8 @@ class ConestogaPlayblastVisibilityDialog(QtWidgets.QDialog):
         index = 0
         self.visibility_checkboxes = []
 
-        for i in range(len(ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP)):
-            checkbox = QtWidgets.QCheckBox(ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP[i][0])
+        for i in range(len(ZurbriggPlayblast.VIEWPORT_VISIBILITY_LOOKUP)):
+            checkbox = QtWidgets.QCheckBox(ZurbriggPlayblast.VIEWPORT_VISIBILITY_LOOKUP[i][0])
 
             visibility_layout.addWidget(checkbox, index / 3, index % 3)
             self.visibility_checkboxes.append(checkbox)
@@ -1524,42 +1525,42 @@ class ConestogaPlayblastVisibilityDialog(QtWidgets.QDialog):
             self.visibility_checkboxes[i].setChecked(data[i])
 
 
-class ConestogaPlayblastWidget(QtWidgets.QWidget):
+class ZurbriggPlayblastWidget(QtWidgets.QWidget):
 
-    OPT_VAR_OUTPUT_DIR = "cstgPlayblastOutputDir"
-    OPT_VAR_OUTPUT_FILENAME = "cstgPlayblastOutputFilename"
-    OPT_VAR_FORCE_OVERWRITE = "cstgPlayblastForceOverwrite"
+    OPT_VAR_OUTPUT_DIR = "zurPlayblastOutputDir"
+    OPT_VAR_OUTPUT_FILENAME = "zurPlayblastOutputFilename"
+    OPT_VAR_FORCE_OVERWRITE = "zurPlayblastForceOverwrite"
 
-    OPT_VAR_CAMERA = "cstgPlayblastCamera"
-    OPT_VAR_HIDE_DEFAULT_CAMERAS = "cstgPlayblastHideDefaultCameras"
+    OPT_VAR_CAMERA = "zurPlayblastCamera"
+    OPT_VAR_HIDE_DEFAULT_CAMERAS = "zurPlayblastHideDefaultCameras"
 
-    OPT_VAR_RESOLUTION_PRESET = "cstgPlayblastResolutionPreset"
-    OPT_VAR_RESOLUTION_WIDTH = "cstgPlayblastResolutionWidth"
-    OPT_VAR_RESOLUTION_HEIGHT = "cstgPlayblastResolutionHeight"
+    OPT_VAR_RESOLUTION_PRESET = "zurPlayblastResolutionPreset"
+    OPT_VAR_RESOLUTION_WIDTH = "zurPlayblastResolutionWidth"
+    OPT_VAR_RESOLUTION_HEIGHT = "zurPlayblastResolutionHeight"
 
-    OPT_VAR_FRAME_RANGE_PRESET = "cstgPlayblastFrameRangePreset"
-    OPT_VAR_FRAME_RANGE_START = "cstgPlayblastFrameRangeStart"
-    OPT_VAR_FRAME_RANGE_END = "cstgPlayblastFrameRangeEnd"
+    OPT_VAR_FRAME_RANGE_PRESET = "zurPlayblastFrameRangePreset"
+    OPT_VAR_FRAME_RANGE_START = "zurPlayblastFrameRangeStart"
+    OPT_VAR_FRAME_RANGE_END = "zurPlayblastFrameRangeEnd"
 
-    OPT_VAR_ENCODING_CONTAINER = "cstgPlayblastEncodingContainer"
-    OPT_VAR_ENCODING_VIDEO_CODEC = "cstgPlayblastEncodingVideoCodec"
+    OPT_VAR_ENCODING_CONTAINER = "zurPlayblastEncodingContainer"
+    OPT_VAR_ENCODING_VIDEO_CODEC = "zurPlayblastEncodingVideoCodec"
 
-    OPT_VAR_H264_QUALITY = "cstgPlayblastH264Quality"
-    OPT_VAR_H264_PRESET = "cstgPlayblastH264Preset"
+    OPT_VAR_H264_QUALITY = "zurPlayblastH264Quality"
+    OPT_VAR_H264_PRESET = "zurPlayblastH264Preset"
 
-    OPT_VAR_IMAGE_QUALITY = "cstgPlayblastImageQuality"
+    OPT_VAR_IMAGE_QUALITY = "zurPlayblastImageQuality"
 
-    OPT_VAR_VISIBILITY_PRESET = "cstgPlayblastVisibilityPreset"
-    OPT_VAR_VISIBILITY_DATA = "cstgPlayblastVisibilityData"
+    OPT_VAR_VISIBILITY_PRESET = "zurPlayblastVisibilityPreset"
+    OPT_VAR_VISIBILITY_DATA = "zurPlayblastVisibilityData"
 
-    OPT_VAR_OVERSCAN = "cstgPlayblastOverscan"
-    OPT_VAR_ORNAMENTS = "cstgPlayblastOrnaments"
-    OPT_VAR_OFFSCREEN = "cstgPlayblastOffscreen"
-    OPT_VAR_SHOT_MASK = "cstgPlayblastShotMask"
-    OPT_VAR_FIT_SHOT_MASK = "cstgPlayblastFitShotMask"
-    OPT_VAR_VIEWER = "cstgPlayblastViewer"
+    OPT_VAR_OVERSCAN = "zurPlayblastOverscan"
+    OPT_VAR_ORNAMENTS = "zurPlayblastOrnaments"
+    OPT_VAR_OFFSCREEN = "zurPlayblastOffscreen"
+    OPT_VAR_SHOT_MASK = "zurPlayblastShotMask"
+    OPT_VAR_FIT_SHOT_MASK = "zurPlayblastFitShotMask"
+    OPT_VAR_VIEWER = "zurPlayblastViewer"
 
-    OPT_VAR_LOG_TO_SCRIPT_EDITOR = "cstgPlayblastLogToSE"
+    OPT_VAR_LOG_TO_SCRIPT_EDITOR = "zurPlayblastLogToSE"
 
     CONTAINER_PRESETS = [
         "mov",
@@ -1571,9 +1572,9 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
 
     def __init__(self, parent=None):
-        super(ConestogaPlayblastWidget, self).__init__(parent)
+        super(ZurbriggPlayblastWidget, self).__init__(parent)
 
-        self._playblast = ConestogaPlayblast()
+        self._playblast = ZurbriggPlayblast()
 
         self._settings_dialog = None
         self._encoder_settings_dialog = None
@@ -1586,7 +1587,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.load_settings()
 
     def create_widgets(self):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        scale_value = ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()
 
         button_height = int(19 * scale_value)
         icon_button_width = int(24 * scale_value)
@@ -1594,7 +1595,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         combo_box_min_width = int(100 * scale_value)
         spin_box_min_width = int(40 * scale_value)
 
-        self.output_dir_path_le = ConestogaLineEdit(ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
+        self.output_dir_path_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
         self.output_dir_path_le.setPlaceholderText("{project}/movies")
 
         self.output_dir_path_select_btn = QtWidgets.QPushButton("...")
@@ -1605,7 +1606,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.output_dir_path_show_folder_btn.setFixedSize(icon_button_width, icon_button_height)
         self.output_dir_path_show_folder_btn.setToolTip("Show in Folder")
 
-        self.output_filename_le = ConestogaLineEdit(ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
+        self.output_filename_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
         self.output_filename_le.setPlaceholderText("{scene}_{timestamp}")
         self.output_filename_le.setMaximumWidth(int(200 * scale_value))
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
@@ -1614,7 +1615,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.resolution_select_cmb.setMinimumWidth(combo_box_min_width)
         self.resolution_select_cmb.addItems(self._playblast.resolution_preset_names)
         self.resolution_select_cmb.addItem("Custom")
-        self.resolution_select_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_RESOLUTION)
+        self.resolution_select_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_RESOLUTION)
 
         self.resolution_width_sb = QtWidgets.QSpinBox()
         self.resolution_width_sb.setButtonSymbols(QtWidgets.QSpinBox.NoButtons)
@@ -1634,9 +1635,9 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
         self.frame_range_cmb = QtWidgets.QComboBox()
         self.frame_range_cmb.setMinimumWidth(combo_box_min_width)
-        self.frame_range_cmb.addItems(ConestogaPlayblast.FRAME_RANGE_PRESETS)
+        self.frame_range_cmb.addItems(ZurbriggPlayblast.FRAME_RANGE_PRESETS)
         self.frame_range_cmb.addItem("Custom")
-        self.frame_range_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_FRAME_RANGE)
+        self.frame_range_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_FRAME_RANGE)
 
         self.frame_range_start_sb = QtWidgets.QSpinBox()
         self.frame_range_start_sb.setButtonSymbols(QtWidgets.QSpinBox.NoButtons)
@@ -1652,8 +1653,8 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
         self.encoding_container_cmb = QtWidgets.QComboBox()
         self.encoding_container_cmb.setMinimumWidth(combo_box_min_width)
-        self.encoding_container_cmb.addItems(ConestogaPlayblastWidget.CONTAINER_PRESETS)
-        self.encoding_container_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_CONTAINER)
+        self.encoding_container_cmb.addItems(ZurbriggPlayblastWidget.CONTAINER_PRESETS)
+        self.encoding_container_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_CONTAINER)
 
         self.encoding_video_codec_cmb = QtWidgets.QComboBox()
         self.encoding_video_codec_cmb.setMinimumWidth(combo_box_min_width)
@@ -1664,7 +1665,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.visibility_cmb.setMinimumWidth(combo_box_min_width)
         self.visibility_cmb.addItems(self._playblast.viewport_visibility_preset_names)
         self.visibility_cmb.addItem("Custom")
-        self.visibility_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_VISIBILITY)
+        self.visibility_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_VISIBILITY)
 
         self.visibility_customize_btn = QtWidgets.QPushButton("Customize...")
         self.visibility_customize_btn.setFixedHeight(button_height)
@@ -1711,7 +1712,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         output_file_layout.addWidget(self.output_filename_le)
         output_file_layout.addWidget(self.force_overwrite_cb)
 
-        output_layout = ConestogaFormLayout()
+        output_layout = ZurbriggFormLayout()
         output_layout.setContentsMargins(4, 14, 4, 14)
         output_layout.addLayoutRow(0, "Output Dir:", output_path_layout)
         output_layout.addLayoutRow(1, "Filename:", output_file_layout)
@@ -1766,7 +1767,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         cb_options_layout_b.addWidget(self.viewer_cb, 0, 2)
         cb_options_layout_b.setColumnStretch(2, 1)
 
-        options_layout = ConestogaFormLayout()
+        options_layout = ZurbriggFormLayout()
         options_layout.setVerticalSpacing(5)
         options_layout.addLayoutRow(0, "Camera:", camera_options_layout)
         options_layout.addLayoutRow(1, "Resolution:", resolution_layout)
@@ -1776,7 +1777,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         options_layout.addLayoutRow(5, "", cb_options_layout_a)
         options_layout.addLayoutRow(6, "", cb_options_layout_b)
 
-        self.options_grp = ConestogaCollapsibleGrpWidget("Options")
+        self.options_grp = ZurbriggCollapsibleGrpWidget("Options")
         self.options_grp.add_layout(options_layout)
 
         logging_button_layout = QtWidgets.QHBoxLayout()
@@ -1785,7 +1786,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         logging_button_layout.addStretch()
         logging_button_layout.addWidget(self.clear_btn)
 
-        self.logging_grp = ConestogaCollapsibleGrpWidget("Logging")
+        self.logging_grp = ZurbriggCollapsibleGrpWidget("Logging")
         self.logging_grp.body_layout.setContentsMargins(0, 0, 0, 0)
         self.logging_grp.append_stretch_on_collapse = True
         self.logging_grp.setContentsMargins(0, 0, 0, 0)
@@ -1838,7 +1839,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         if not filename:
             filename = self.output_filename_le.placeholderText()
 
-        padding = ConestogaPlayblast.DEFAULT_PADDING
+        padding = ZurbriggPlayblast.DEFAULT_PADDING
 
         overscan = self.overscan_cb.isChecked()
         show_ornaments = self.ornaments_cb.isChecked()
@@ -1848,10 +1849,10 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         offscreen = self.offscreen_cb.isChecked()
 
         display_shot_mask = self.shot_mask_cb.isChecked()
-        shot_mask_visible = ConestogaShotMask.get_mask()
+        shot_mask_visible = ZurbriggShotMask.get_mask()
         fit_shot_mask = self.fit_shot_mask_cb.isChecked()
 
-        orig_camera = ConestogaShotMask.get_camera_name()
+        orig_camera = ZurbriggShotMask.get_camera_name()
 
         cmds.evalDeferred(partial(self.pre_playblast, display_shot_mask, shot_mask_visible, fit_shot_mask))
 
@@ -1878,13 +1879,13 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
                 cmds.setAttr("defaultResolution.width", playblast_width)
                 cmds.setAttr("defaultResolution.deviceAspectRatio", playblast_width / float(playblast_height))
 
-            ConestogaShotMask.set_camera_name("")
+            ZurbriggShotMask.set_camera_name("")
             if shot_mask_visible:
-                ConestogaShotMask.refresh_mask()
+                ZurbriggShotMask.refresh_mask()
             else:
-                ConestogaShotMask.create_mask()
+                ZurbriggShotMask.create_mask()
         else:
-            ConestogaShotMask.delete_mask()
+            ZurbriggShotMask.delete_mask()
 
     def post_playblast(self, display_shot_mask, shot_mask_visible, fit_shot_mask, orig_camera):
         if display_shot_mask:
@@ -1892,13 +1893,13 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
                 cmds.setAttr("defaultResolution.width", self.orig_render_width)
                 cmds.setAttr("defaultResolution.deviceAspectRatio", self.orig_render_device_aspect_ratio)
 
-            ConestogaShotMask.set_camera_name(orig_camera)
+            ZurbriggShotMask.set_camera_name(orig_camera)
             if shot_mask_visible:
-                ConestogaShotMask.refresh_mask()
+                ZurbriggShotMask.refresh_mask()
             else:
-                ConestogaShotMask.delete_mask()
+                ZurbriggShotMask.delete_mask()
         elif shot_mask_visible:
-            ConestogaShotMask.create_mask()
+            ZurbriggShotMask.create_mask()
 
     def select_output_directory(self):
         current_dir_path = self.output_dir_path_le.text()
@@ -1944,7 +1945,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.camera_select_cmb.clear()
 
         self.camera_select_cmb.addItem("<Active>")
-        self.camera_select_cmb.addItems(ConestogaPlayblastUtils.cameras_in_scene(not self.camera_select_hide_defaults_cb.isChecked(), True))
+        self.camera_select_cmb.addItems(ZurbriggAdvancedPlayblastUtils.cameras_in_scene(not self.camera_select_hide_defaults_cb.isChecked(), True))
 
         self.camera_select_cmb.setCurrentText(current_camera)
 
@@ -2003,7 +2004,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.encoding_video_codec_cmb.clear()
 
         container = self.encoding_container_cmb.currentText()
-        self.encoding_video_codec_cmb.addItems(ConestogaPlayblast.VIDEO_ENCODER_LOOKUP[container])
+        self.encoding_video_codec_cmb.addItems(ZurbriggPlayblast.VIDEO_ENCODER_LOOKUP[container])
         self.encoding_video_codec_cmb.setCurrentText(encoder)
 
     def on_video_encoder_changed(self):
@@ -2015,7 +2016,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def show_encoder_settings_dialog(self):
         if not self._encoder_settings_dialog:
-            self._encoder_settings_dialog = ConestogaPlayblastEncoderSettingsDialog(self)
+            self._encoder_settings_dialog = ZurbriggPlayblastEncoderSettingsDialog(self)
             self._encoder_settings_dialog.accepted.connect(self.on_encoder_settings_dialog_modified)
 
         if self.encoding_container_cmb.currentText() == "Image":
@@ -2055,7 +2056,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def show_visibility_dialog(self):
         if not self._visibility_dialog:
-            self._visibility_dialog = ConestogaPlayblastVisibilityDialog(self)
+            self._visibility_dialog = ZurbriggPlayblastVisibilityDialog(self)
             self._visibility_dialog.accepted.connect(self.on_visibility_dialog_modified)
 
         self._visibility_dialog.set_visibility_data(self._playblast.get_visibility())
@@ -2084,96 +2085,96 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.logging_grp.set_collapsed(collapsed & 2)
 
     def save_settings(self):
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_OUTPUT_DIR, self.output_dir_path_le.text()))
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_OUTPUT_FILENAME, self.output_filename_le.text()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE, self.force_overwrite_cb.isChecked()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_DIR, self.output_dir_path_le.text()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_FILENAME, self.output_filename_le.text()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_FORCE_OVERWRITE, self.force_overwrite_cb.isChecked()))
 
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_CAMERA, self.camera_select_cmb.currentText()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS, self.camera_select_hide_defaults_cb.isChecked()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_CAMERA, self.camera_select_cmb.currentText()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS, self.camera_select_hide_defaults_cb.isChecked()))
 
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_PRESET, self.resolution_select_cmb.currentText()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH, self.resolution_width_sb.value()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT, self.resolution_height_sb.value()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_PRESET, self.resolution_select_cmb.currentText()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH, self.resolution_width_sb.value()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT, self.resolution_height_sb.value()))
 
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET, self.frame_range_cmb.currentText()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_START, self.frame_range_start_sb.value()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_END, self.frame_range_end_sb.value()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET, self.frame_range_cmb.currentText()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_START, self.frame_range_start_sb.value()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_END, self.frame_range_end_sb.value()))
 
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_ENCODING_CONTAINER, self.encoding_container_cmb.currentText()))
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC, self.encoding_video_codec_cmb.currentText()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_ENCODING_CONTAINER, self.encoding_container_cmb.currentText()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC, self.encoding_video_codec_cmb.currentText()))
 
         h264_settings = self._playblast.get_h264_settings()
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_H264_QUALITY, h264_settings["quality"]))
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_H264_PRESET, h264_settings["preset"]))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_H264_QUALITY, h264_settings["quality"]))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_H264_PRESET, h264_settings["preset"]))
 
         image_settings = self._playblast.get_image_settings()
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_IMAGE_QUALITY, image_settings["quality"]))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_IMAGE_QUALITY, image_settings["quality"]))
 
-        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_PRESET, self.visibility_cmb.currentText()))
+        cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_PRESET, self.visibility_cmb.currentText()))
 
         visibility_data = self._playblast.get_visibility()
         if visibility_data:
             visibility_str = ""
             for item in visibility_data:
                 visibility_str = "{0} {1}".format(visibility_str, int(item))
-            cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_DATA, visibility_str))
+            cmds.optionVar(sv=(ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_DATA, visibility_str))
 
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_OVERSCAN, self.overscan_cb.isChecked()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_ORNAMENTS, self.ornaments_cb.isChecked()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_OFFSCREEN, self.offscreen_cb.isChecked()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_SHOT_MASK, self.shot_mask_cb.isChecked()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_FIT_SHOT_MASK, self.fit_shot_mask_cb.isChecked()))
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_VIEWER, self.viewer_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_OVERSCAN, self.overscan_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_ORNAMENTS, self.ornaments_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_OFFSCREEN, self.offscreen_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_SHOT_MASK, self.shot_mask_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_FIT_SHOT_MASK, self.fit_shot_mask_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_VIEWER, self.viewer_cb.isChecked()))
 
-        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR, self.log_to_script_editor_cb.isChecked()))
+        cmds.optionVar(iv=(ZurbriggPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR, self.log_to_script_editor_cb.isChecked()))
 
     def load_settings(self):
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_OUTPUT_DIR):
-            self.output_dir_path_le.setText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_OUTPUT_DIR))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_OUTPUT_FILENAME):
-            self.output_filename_le.setText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_OUTPUT_FILENAME))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE):
-            self.force_overwrite_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_DIR):
+            self.output_dir_path_le.setText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_DIR))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_FILENAME):
+            self.output_filename_le.setText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_OUTPUT_FILENAME))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_FORCE_OVERWRITE):
+            self.force_overwrite_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_FORCE_OVERWRITE))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_CAMERA):
-            self.camera_select_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_CAMERA))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS):
-            self.camera_select_hide_defaults_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_CAMERA):
+            self.camera_select_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_CAMERA))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS):
+            self.camera_select_hide_defaults_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_PRESET):
-            self.resolution_select_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_PRESET))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_PRESET):
+            self.resolution_select_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_PRESET))
         if self.resolution_select_cmb.currentText() == "Custom":
-            if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH):
-                self.resolution_width_sb.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH))
-            if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT):
-                self.resolution_height_sb.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT))
+            if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH):
+                self.resolution_width_sb.setValue(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_WIDTH))
+            if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT):
+                self.resolution_height_sb.setValue(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_RESOLUTION_HEIGHT))
             self.on_resolution_changed()
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET):
-            self.frame_range_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET):
+            self.frame_range_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_PRESET))
         if self.frame_range_cmb.currentText() == "Custom":
-            if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_START):
-                self.frame_range_start_sb.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_START))
-            if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_END):
-                self.frame_range_end_sb.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FRAME_RANGE_END))
+            if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_START):
+                self.frame_range_start_sb.setValue(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_START))
+            if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_END):
+                self.frame_range_end_sb.setValue(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_FRAME_RANGE_END))
             self.on_frame_range_changed()
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_ENCODING_CONTAINER):
-            self.encoding_container_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_ENCODING_CONTAINER))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC):
-            self.encoding_video_codec_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_ENCODING_CONTAINER):
+            self.encoding_container_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_ENCODING_CONTAINER))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC):
+            self.encoding_video_codec_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_ENCODING_VIDEO_CODEC))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_H264_QUALITY) and cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_H264_PRESET):
-            self._playblast.set_h264_settings(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_H264_QUALITY), cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_H264_PRESET))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_H264_QUALITY) and cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_H264_PRESET):
+            self._playblast.set_h264_settings(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_H264_QUALITY), cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_H264_PRESET))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_IMAGE_QUALITY):
-            self._playblast.set_image_settings(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_IMAGE_QUALITY))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_IMAGE_QUALITY):
+            self._playblast.set_image_settings(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_IMAGE_QUALITY))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_PRESET):
-            self.visibility_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_PRESET))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_PRESET):
+            self.visibility_cmb.setCurrentText(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_PRESET))
         if self.visibility_cmb.currentText() == "Custom":
-            if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_DATA):
-                visibility_str_list = cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_VISIBILITY_DATA).split()
+            if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_DATA):
+                visibility_str_list = cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_VISIBILITY_DATA).split()
                 visibility_data = []
                 for item in visibility_str_list:
                     if item:
@@ -2181,21 +2182,21 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
                 self._playblast.set_visibility(visibility_data)
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_OVERSCAN):
-            self.overscan_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_OVERSCAN))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_ORNAMENTS):
-            self.ornaments_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_ORNAMENTS))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_OFFSCREEN):
-            self.offscreen_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_OFFSCREEN))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_SHOT_MASK):
-            self.shot_mask_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_SHOT_MASK))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FIT_SHOT_MASK):
-            self.fit_shot_mask_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FIT_SHOT_MASK))
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_VIEWER):
-            self.viewer_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_VIEWER))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_OVERSCAN):
+            self.overscan_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_OVERSCAN))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_ORNAMENTS):
+            self.ornaments_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_ORNAMENTS))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_OFFSCREEN):
+            self.offscreen_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_OFFSCREEN))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_SHOT_MASK):
+            self.shot_mask_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_SHOT_MASK))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_FIT_SHOT_MASK):
+            self.fit_shot_mask_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_FIT_SHOT_MASK))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_VIEWER):
+            self.viewer_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_VIEWER))
 
-        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR):
-            self.log_to_script_editor_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR))
+        if cmds.optionVar(exists=ZurbriggPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR):
+            self.log_to_script_editor_cb.setChecked(cmds.optionVar(q=ZurbriggPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR))
 
     def append_output(self, text):
         self.output_edit.appendPlainText(text)
@@ -2212,17 +2213,17 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.camera_select_cmb.setCurrentIndex(0)
         self.camera_select_hide_defaults_cb.setChecked(False)
 
-        self.resolution_select_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_RESOLUTION)
+        self.resolution_select_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_RESOLUTION)
 
-        self.frame_range_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_FRAME_RANGE)
+        self.frame_range_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_FRAME_RANGE)
 
-        self.encoding_container_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_CONTAINER)
-        self.encoding_video_codec_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_ENCODER)
+        self.encoding_container_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_CONTAINER)
+        self.encoding_video_codec_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_ENCODER)
 
-        self._playblast.set_h264_settings(ConestogaPlayblast.DEFAULT_H264_QUALITY, ConestogaPlayblast.DEFAULT_H264_PRESET)
-        self._playblast.set_image_settings(ConestogaPlayblast.DEFAULT_IMAGE_QUALITY)
+        self._playblast.set_h264_settings(ZurbriggPlayblast.DEFAULT_H264_QUALITY, ZurbriggPlayblast.DEFAULT_H264_PRESET)
+        self._playblast.set_image_settings(ZurbriggPlayblast.DEFAULT_IMAGE_QUALITY)
 
-        self.visibility_cmb.setCurrentText(ConestogaPlayblast.DEFAULT_VISIBILITY)
+        self.visibility_cmb.setCurrentText(ZurbriggPlayblast.DEFAULT_VISIBILITY)
         self._playblast.set_viewport_visibility
 
         self.ornaments_cb.setChecked(False)
@@ -2231,7 +2232,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.fit_shot_mask_cb.setChecked(False)
         self.viewer_cb.setChecked(True)
 
-        self.log_to_script_editor_cb.setChecked(ConestogaPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
+        self.log_to_script_editor_cb.setChecked(ZurbriggPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
 
         self.save_settings()
 
@@ -2245,12 +2246,12 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.save_settings()
 
 
-class ConestogaShotMask(object):
+class ZurbriggShotMask(object):
 
-    NODE_NAME = "ConestogaShotMask"
+    NODE_NAME = "ZurbriggShotMask"
 
-    TRANSFORM_NODE_NAME = "cshotmask"
-    SHAPE_NODE_NAME = "cshotmaskShape"
+    TRANSFORM_NODE_NAME = "zshotmask"
+    SHAPE_NODE_NAME = "zshotmaskShape"
 
     DEFAULT_BORDER_COLOR = [0.0, 0.0, 0.0, 1.0]
     DEFAULT_LABEL_COLOR = [1.0, 1.0, 1.0, 1.0]
@@ -2260,22 +2261,22 @@ class ConestogaShotMask(object):
     MAX_COUNTER_PADDING = 6
     DEFAULT_COUNTER_PADDING = 4
 
-    OPT_VAR_CAMERA_NAME = "cstgShotMaskCameraName"
-    OPT_VAR_LABEL_TEXT = "cstgShotMaskLabelText"
-    OPT_VAR_LABEL_FONT = "cstgShotMaskLabelFont"
-    OPT_VAR_LABEL_COLOR = "cstgShotMaskLabelColor"
-    OPT_VAR_LABEL_SCALE = "cstgShotMaskLabelScale"
-    OPT_VAR_BORDER_VISIBLE = "cstgShotMaskBorderVisible"
-    OPT_VAR_BORDER_COLOR = "cstgShotMaskBorderColor"
-    OPT_VAR_BORDER_SCALE = "cstgShotMaskBorderScale"
-    OPT_VAR_BORDER_AR_ENABLED = "cstgShotMaskBorderAREnabled"
-    OPT_VAR_BORDER_AR = "cstgShotMaskBorderAR"
-    OPT_VAR_COUNTER_PADDING = "cstgShotMaskCounterPadding"
+    OPT_VAR_CAMERA_NAME = "zurShotMaskCameraName"
+    OPT_VAR_LABEL_TEXT = "zurShotMaskLabelText"
+    OPT_VAR_LABEL_FONT = "zurShotMaskLabelFont"
+    OPT_VAR_LABEL_COLOR = "zurShotMaskLabelColor"
+    OPT_VAR_LABEL_SCALE = "zurShotMaskLabelScale"
+    OPT_VAR_BORDER_VISIBLE = "zurShotMaskBorderVisible"
+    OPT_VAR_BORDER_COLOR = "zurShotMaskBorderColor"
+    OPT_VAR_BORDER_SCALE = "zurShotMaskBorderScale"
+    OPT_VAR_BORDER_AR_ENABLED = "zurShotMaskBorderAREnabled"
+    OPT_VAR_BORDER_AR = "zurShotMaskBorderAR"
+    OPT_VAR_COUNTER_PADDING = "zurShotMaskCounterPadding"
 
 
     @classmethod
     def create_mask(cls):
-        if not ConestogaPlayblastUtils.load_plugin():
+        if not ZurbriggAdvancedPlayblastUtils.load_plugin():
             return
 
         if not cls.get_mask():
@@ -2300,7 +2301,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def get_mask(cls):
-        if ConestogaPlayblastUtils.is_plugin_loaded():
+        if ZurbriggAdvancedPlayblastUtils.is_plugin_loaded():
             nodes = cmds.ls(type=cls.NODE_NAME)
             if len(nodes) > 0:
                 return nodes[0]
@@ -2510,7 +2511,7 @@ class ConestogaShotMask(object):
         cmds.optionVar(remove=cls.OPT_VAR_LABEL_TEXT)
 
 
-class ConestogaShotMaskWidget(QtWidgets.QWidget):
+class ZurbriggShotMaskWidget(QtWidgets.QWidget):
 
     LABELS = ["Top-Left", "Top-Center", "Top-Right", "Bottom-Left", "Bottom-Center", "Bottom-Right"]
 
@@ -2520,7 +2521,7 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
 
 
     def __init__(self, parent=None):
-        super(ConestogaShotMaskWidget, self).__init__(parent)
+        super(ZurbriggShotMaskWidget, self).__init__(parent)
 
         self._camera_select_dialog = None
         self._update_mask_enabled = True
@@ -2530,7 +2531,7 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.create_connections()
 
     def create_widgets(self):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        scale_value = ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()
 
         button_width = int(60 * scale_value)
         button_height = int(18 * scale_value)
@@ -2541,8 +2542,8 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.camera_select_btn.setFixedSize(button_width, button_height)
 
         self.label_line_edits = []
-        for i in range(len(ConestogaShotMaskWidget.LABELS)):  # pylint: disable=W0612
-            line_edit = ConestogaLineEdit(ConestogaLineEdit.TYPE_SHOT_MASK_LABEL)
+        for i in range(len(ZurbriggShotMaskWidget.LABELS)):  # pylint: disable=W0612
+            line_edit = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
             self.label_line_edits.append(line_edit)
 
         self.font_le = QtWidgets.QLineEdit()
@@ -2551,7 +2552,7 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.font_select_btn = QtWidgets.QPushButton("Select...")
         self.font_select_btn.setFixedSize(button_width, button_height)
 
-        self.label_color_btn = ConestogaColorButton()
+        self.label_color_btn = ZurbriggColorButton()
 
         self.label_transparency_dsb = QtWidgets.QDoubleSpinBox()
         self.label_transparency_dsb.setMinimumWidth(spin_box_width)
@@ -2576,7 +2577,7 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.bottom_border_cb = QtWidgets.QCheckBox("Bottom")
         self.bottom_border_cb.setChecked(True)
 
-        self.border_color_btn = ConestogaColorButton()
+        self.border_color_btn = ZurbriggColorButton()
 
         self.border_transparency_dsb = QtWidgets.QDoubleSpinBox()
         self.border_transparency_dsb.setMinimumWidth(spin_box_width)
@@ -2624,14 +2625,14 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         camera_layout.addWidget(self.camera_le)
         camera_layout.addWidget(self.camera_select_btn)
 
-        camera_grp_layout = ConestogaFormLayout()
+        camera_grp_layout = ZurbriggFormLayout()
         camera_grp_layout.addLayoutRow(0, "Camera", camera_layout)
 
-        labels_layout = ConestogaFormLayout()
-        for i in range(len(ConestogaShotMaskWidget.LABELS)):
-            labels_layout.addWidgetRow(i,ConestogaShotMaskWidget.LABELS[i], self.label_line_edits[i])
+        labels_layout = ZurbriggFormLayout()
+        for i in range(len(ZurbriggShotMaskWidget.LABELS)):
+            labels_layout.addWidgetRow(i,ZurbriggShotMaskWidget.LABELS[i], self.label_line_edits[i])
 
-        self.labels_grp = ConestogaCollapsibleGrpWidget("Labels")
+        self.labels_grp = ZurbriggCollapsibleGrpWidget("Labels")
         self.labels_grp.add_layout(labels_layout)
 
         font_layout = QtWidgets.QHBoxLayout()
@@ -2649,11 +2650,11 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         text_color_layout.addWidget(self.label_scale_dsb)
         text_color_layout.addStretch()
 
-        text_layout = ConestogaFormLayout()
+        text_layout = ZurbriggFormLayout()
         text_layout.addLayoutRow(0, "Font", font_layout)
         text_layout.addLayoutRow(1, "Color", text_color_layout)
 
-        self.text_grp = ConestogaCollapsibleGrpWidget("Text")
+        self.text_grp = ZurbriggCollapsibleGrpWidget("Text")
         self.text_grp.add_layout(text_layout)
 
         border_visibility_layout = QtWidgets.QHBoxLayout()
@@ -2673,22 +2674,22 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         border_color_layout.addWidget(self.border_aspect_ratio_dsb)
         border_color_layout.addStretch()
 
-        borders_layout = ConestogaFormLayout()
+        borders_layout = ZurbriggFormLayout()
         # borders_layout.setSpacing(4)
         borders_layout.addLayoutRow(0, "", border_visibility_layout)
         borders_layout.addLayoutRow(1, "Color", border_color_layout)
 
-        self.borders_grp = ConestogaCollapsibleGrpWidget("Borders")
+        self.borders_grp = ZurbriggCollapsibleGrpWidget("Borders")
         self.borders_grp.add_layout(borders_layout)
 
         counter_padding_layout = QtWidgets.QHBoxLayout()
         counter_padding_layout.addWidget(self.counter_padding_sb)
         counter_padding_layout.addStretch()
 
-        counter_layout = ConestogaFormLayout()
+        counter_layout = ZurbriggFormLayout()
         counter_layout.addLayoutRow(0, "Padding", counter_padding_layout)
 
-        self.counter_grp = ConestogaCollapsibleGrpWidget("Counter")
+        self.counter_grp = ZurbriggCollapsibleGrpWidget("Counter")
         self.counter_grp.add_layout(counter_layout)
 
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -2731,17 +2732,17 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
     def refresh_cameras(self):
 
         cameras = cmds.listCameras()
-        cameras.insert(0, ConestogaShotMaskWidget.ALL_CAMERAS)
+        cameras.insert(0, ZurbriggShotMaskWidget.ALL_CAMERAS)
 
 
     def create_mask(self):
-        ConestogaShotMask.create_mask()
+        ZurbriggShotMask.create_mask()
 
     def delete_mask(self):
-        ConestogaShotMask.delete_mask()
+        ZurbriggShotMask.delete_mask()
 
     def toggle_mask(self):
-        if ConestogaShotMask.get_mask():
+        if ZurbriggShotMask.get_mask():
             self.delete_mask()
         else:
             self.create_mask()
@@ -2750,83 +2751,83 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         if not self._update_mask_enabled:
             return
 
-        ConestogaShotMask.set_camera_name(self.camera_le.text())
+        ZurbriggShotMask.set_camera_name(self.camera_le.text())
 
         label_text = []
         for line_edit in self.label_line_edits:
             label_text.append(line_edit.text())
-        ConestogaShotMask.set_label_text(label_text)
+        ZurbriggShotMask.set_label_text(label_text)
 
-        ConestogaShotMask.set_label_font(self.font_le.text())
-        ConestogaShotMask.set_label_scale(self.label_scale_dsb.value())
+        ZurbriggShotMask.set_label_font(self.font_le.text())
+        ZurbriggShotMask.set_label_scale(self.label_scale_dsb.value())
 
         label_color = self.label_color_btn.get_color()
         label_alpha = self.label_transparency_dsb.value()
-        ConestogaShotMask.set_label_color(label_color[0], label_color[1], label_color[2], label_alpha)
+        ZurbriggShotMask.set_label_color(label_color[0], label_color[1], label_color[2], label_alpha)
 
-        ConestogaShotMask.set_border_visible(self.top_border_cb.isChecked(), self.bottom_border_cb.isChecked())
-        ConestogaShotMask.set_border_scale(self.border_scale_dsb.value())
-        ConestogaShotMask.set_border_aspect_ratio_enabled(self.frame_border_to_aspect_ratio_cb.isChecked())
-        ConestogaShotMask.set_border_aspect_ratio(self.border_aspect_ratio_dsb.value())
+        ZurbriggShotMask.set_border_visible(self.top_border_cb.isChecked(), self.bottom_border_cb.isChecked())
+        ZurbriggShotMask.set_border_scale(self.border_scale_dsb.value())
+        ZurbriggShotMask.set_border_aspect_ratio_enabled(self.frame_border_to_aspect_ratio_cb.isChecked())
+        ZurbriggShotMask.set_border_aspect_ratio(self.border_aspect_ratio_dsb.value())
 
         border_color = self.border_color_btn.get_color()
         border_alpha = self.border_transparency_dsb.value()
-        ConestogaShotMask.set_border_color(border_color[0], border_color[1], border_color[2], border_alpha)
+        ZurbriggShotMask.set_border_color(border_color[0], border_color[1], border_color[2], border_alpha)
 
-        ConestogaShotMask.set_counter_padding(self.counter_padding_sb.value())
+        ZurbriggShotMask.set_counter_padding(self.counter_padding_sb.value())
 
-        ConestogaShotMask.refresh_mask()
+        ZurbriggShotMask.refresh_mask()
 
     def update_ui_elements(self):
         self._update_mask_enabled = False
 
-        camera_name = ConestogaShotMask.get_camera_name()
+        camera_name = ZurbriggShotMask.get_camera_name()
         if not camera_name:
-            camera_name = ConestogaShotMaskWidget.ALL_CAMERAS
+            camera_name = ZurbriggShotMaskWidget.ALL_CAMERAS
         self.camera_le.setText(camera_name)
 
-        label_text = ConestogaShotMask.get_label_text()
+        label_text = ZurbriggShotMask.get_label_text()
         for i in range(len(label_text)):
             self.label_line_edits[i].setText(label_text[i])
 
-        self.font_le.setText(ConestogaShotMask.get_label_font())
-        self.label_scale_dsb.setValue(ConestogaShotMask.get_label_scale())
+        self.font_le.setText(ZurbriggShotMask.get_label_font())
+        self.label_scale_dsb.setValue(ZurbriggShotMask.get_label_scale())
 
-        label_color = ConestogaShotMask.get_label_color()
+        label_color = ZurbriggShotMask.get_label_color()
         self.label_color_btn.set_color(label_color)
         self.label_transparency_dsb.setValue(label_color[3])
 
-        border_visible = ConestogaShotMask.get_border_visible()
+        border_visible = ZurbriggShotMask.get_border_visible()
         self.top_border_cb.setChecked(border_visible[0])
         self.bottom_border_cb.setChecked(border_visible[1])
-        self.border_scale_dsb.setValue(ConestogaShotMask.get_border_scale())
+        self.border_scale_dsb.setValue(ZurbriggShotMask.get_border_scale())
 
-        border_color = ConestogaShotMask.get_border_color()
+        border_color = ZurbriggShotMask.get_border_color()
         self.border_color_btn.set_color(border_color)
         self.border_transparency_dsb.setValue(border_color[3])
 
-        self.frame_border_to_aspect_ratio_cb.setChecked(ConestogaShotMask.is_border_aspect_ratio_enabled())
-        self.border_aspect_ratio_dsb.setValue(ConestogaShotMask.get_border_aspect_ratio())
+        self.frame_border_to_aspect_ratio_cb.setChecked(ZurbriggShotMask.is_border_aspect_ratio_enabled())
+        self.border_aspect_ratio_dsb.setValue(ZurbriggShotMask.get_border_aspect_ratio())
         self.on_border_aspect_ratio_enabled_changed()
 
-        self.counter_padding_sb.setValue(ConestogaShotMask.get_counter_padding())
+        self.counter_padding_sb.setValue(ZurbriggShotMask.get_counter_padding())
 
         self._update_mask_enabled = True
 
     def reset_settings(self):
-        ConestogaShotMask.reset_settings()
+        ZurbriggShotMask.reset_settings()
 
         self.update_ui_elements()
         self.update_mask()
 
     def show_camera_select_dialog(self):
         if not self._camera_select_dialog:
-            self._camera_select_dialog = ConestogaCameraSelectDialog(self)
+            self._camera_select_dialog = ZurbriggCameraSelectDialog(self)
             self._camera_select_dialog.setWindowTitle("Shot Mask Camera")
             self._camera_select_dialog.set_camera_list_text("Select shot mask camera:")
             self._camera_select_dialog.accepted.connect(self.on_camera_select_accepted)
 
-        self._camera_select_dialog.refresh_list(selected=[self.camera_le.text()], prepend=[ConestogaShotMaskWidget.ALL_CAMERAS])
+        self._camera_select_dialog.refresh_list(selected=[self.camera_le.text()], prepend=[ZurbriggShotMaskWidget.ALL_CAMERAS])
 
         self._camera_select_dialog.show()
 
@@ -2837,8 +2838,56 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
 
             self.update_mask()
 
+    def on_border_aspect_ratio_enabled_changed(self):
+        enabled = self.frame_border_to_aspect_ratio_cb.isChecked()
+        if enabled:
+            self.border_size_type_text.setText("Aspect Ratio")
+        else:
+            self.border_size_type_text.setText("Scale")
 
-class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
+        self.border_aspect_ratio_dsb.setVisible(enabled)
+        self.border_scale_dsb.setHidden(enabled)
+
+        self.update_mask()
+
+    def on_collapsed_state_changed(self):
+        self.collapsed_state_changed.emit()  # pylint: disable=E1101
+
+    def get_collapsed_states(self):
+        collapsed = 0
+        collapsed += int(self.labels_grp.is_collapsed())
+        collapsed += int(self.text_grp.is_collapsed()) << 1
+        collapsed += int(self.borders_grp.is_collapsed()) << 2
+        collapsed += int(self.counter_grp.is_collapsed()) << 3
+
+        return collapsed
+
+    def set_collapsed_states(self, collapsed):
+        self.labels_grp.set_collapsed(collapsed & 1)
+        self.text_grp.set_collapsed(collapsed & 2)
+        self.borders_grp.set_collapsed(collapsed & 4)
+        self.counter_grp.set_collapsed(collapsed & 8)
+
+    def show_font_select_dialog(self):
+        current_font = QtGui.QFont(self.font_le.text())
+
+        font = QtWidgets.QFontDialog.getFont(current_font, self)
+
+        # Order of the tuple returned by getFont changed in newer versions of Qt
+        if type(font[0]) == bool:
+            ok = font[0]
+            family = font[1].family()
+        else:
+            family = font[0].family()
+            ok = font[1]
+
+        if(ok):
+            self.font_le.setText(family)
+
+            self.update_mask()
+
+
+class ZurbriggAdvancedPlayblastSettingsWidget(QtWidgets.QWidget):
 
     TEMP_FILE_FORMATS = [
         "movie",
@@ -2856,21 +2905,21 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
 
     def __init__(self, parent=None):
-        super(ConestogaPlayblastSettingsWidget, self).__init__(parent)
+        super(ZurbriggAdvancedPlayblastSettingsWidget, self).__init__(parent)
 
         self.create_widgets()
         self.create_layouts()
         self.create_connections()
 
     def create_widgets(self):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        scale_value = ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()
         button_width = int(24 * scale_value)
         button_height = int(19 * scale_value)
         reset_button_min_width = int(200 * scale_value)
 
-        text = '<h3>{0}</h3>'.format(ConestogaPlayblastUi.WINDOW_TITLE)
-        text += '<h3>v{0}</h3>'.format(ConestogaPlayblastUtils.get_version())
-        text += '<p>Conestoga College<br><a style="color:white;text-decoration:none;" href="http://conestogac.on.ca">conestogac.on.ca</a></p>'
+        text = '<h3>{0}</h3>'.format(ZurbriggAdvancedPlayblastUi.WINDOW_TITLE)
+        text += '<h3>v{0}</h3>'.format(ZurbriggAdvancedPlayblastUtils.get_version())
+        text += '<p>Chris Zurbrigg<br><a style="color:white;text-decoration:none;" href="http://zurbrigg.com">zurbrigg.com</a></p>'
 
         self.about_label = QtWidgets.QLabel(text)
         self.about_label.setOpenExternalLinks(True)
@@ -2919,7 +2968,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         temp_format_layout.addWidget(self.temp_file_format_cmb)
         temp_format_layout.addStretch()
 
-        playblast_layout = ConestogaFormLayout()
+        playblast_layout = ZurbriggFormLayout()
         playblast_layout.addLayoutRow(0, "ffmpeg Path", ffmpeg_path_layout)
         playblast_layout.addLayoutRow(1, "Temp Dir", temp_dir_layout)
         playblast_layout.addLayoutRow(2, "Temp Format", temp_format_layout)
@@ -2930,7 +2979,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         playblast_reset_layout.addWidget(self.playblast_reset_btn)
         playblast_reset_layout.addStretch()
 
-        self.playblast_grp = ConestogaCollapsibleGrpWidget("Playblast")
+        self.playblast_grp = ZurbriggCollapsibleGrpWidget("Playblast")
         self.playblast_grp.add_layout(playblast_layout)
         self.playblast_grp.add_layout(playblast_reset_layout)
 
@@ -2939,7 +2988,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         logo_path_layout.addWidget(self.logo_path_le)
         logo_path_layout.addWidget(self.logo_path_select_btn)
 
-        shot_mask_tags_layout = ConestogaFormLayout()
+        shot_mask_tags_layout = ZurbriggFormLayout()
         shot_mask_tags_layout.addLayoutRow(0, "Logo Path", logo_path_layout)
 
         shot_mask_reset_layout = QtWidgets.QHBoxLayout()
@@ -2948,7 +2997,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         shot_mask_reset_layout.addWidget(self.shot_mask_reset_btn)
         shot_mask_reset_layout.addStretch()
 
-        self.shot_mask_grp = ConestogaCollapsibleGrpWidget("Shot Mask")
+        self.shot_mask_grp = ZurbriggCollapsibleGrpWidget("Shot Mask")
         self.shot_mask_grp.add_layout(shot_mask_tags_layout)
         self.shot_mask_grp.add_layout(shot_mask_reset_layout)
 
@@ -2986,8 +3035,8 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
     def open_ffmpeg_select_dialog(self):
 
-        if ConestogaPlayblastUtils.is_ffmpeg_env_var_set():
-            QtWidgets.QMessageBox.information(self, "Select ffmpeg Executable", "The ffmpeg path is currently set using the CONESTOGA_PLAYBLAST_FFMPEG environment variable.")
+        if ZurbriggAdvancedPlayblastUtils.is_ffmpeg_env_var_set():
+            QtWidgets.QMessageBox.information(self, "Select ffmpeg Executable", "The ffmpeg path is currently set using the ZURBRIGG_AP_FFMPEG environment variable.")
             return
 
         current_path = self.ffmpeg_path_le.text()
@@ -2998,11 +3047,11 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
             self.update_ffmpeg_path()
 
     def update_ffmpeg_path(self):
-        ConestogaPlayblastUtils.set_ffmpeg_path(self.ffmpeg_path_le.text())
+        ZurbriggAdvancedPlayblastUtils.set_ffmpeg_path(self.ffmpeg_path_le.text())
 
     def open_temp_dir_select_dialog(self):
-        if ConestogaPlayblastUtils.is_temp_output_env_var_set():
-            QtWidgets.QMessageBox.information(self, "Select Temp Output Directory", "The temp output directory is currently set using the CONESTOGA_PLAYBLAST_TEMP_OUTPUT_DIR environment variable.")
+        if ZurbriggAdvancedPlayblastUtils.is_temp_output_env_var_set():
+            QtWidgets.QMessageBox.information(self, "Select Temp Output Directory", "The temp output directory is currently set using the ZURBRIGG_AP_TEMP_OUTPUT_DIR environment variable.")
             return
 
         current_path = self.temp_dir_le.text()
@@ -3013,15 +3062,15 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
             self.update_temp_dir_path()
 
     def update_temp_dir_path(self):
-        ConestogaPlayblastUtils.set_temp_output_dir_path(self.temp_dir_le.text())
+        ZurbriggAdvancedPlayblastUtils.set_temp_output_dir_path(self.temp_dir_le.text())
 
     def update_temp_file_format(self, text):
-        ConestogaPlayblastUtils.set_temp_file_format(text)
+        ZurbriggAdvancedPlayblastUtils.set_temp_file_format(text)
 
     def open_logo_select_dialog(self):
 
-        if ConestogaPlayblastUtils.is_logo_env_var_set():
-            QtWidgets.QMessageBox.information(self, "Select Logo", "The logo path is currently set using the CONESTOGA_PLAYBLAST_LOGO environment variable.")
+        if ZurbriggAdvancedPlayblastUtils.is_logo_env_var_set():
+            QtWidgets.QMessageBox.information(self, "Select Logo", "The logo path is currently set using the ZURBRIGG_AP_LOGO environment variable.")
             return
 
         current_path = self.logo_path_le.text()
@@ -3032,7 +3081,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
             self.update_logo_path()
 
     def update_logo_path(self):
-        ConestogaPlayblastUtils.set_logo_path(self.logo_path_le.text())
+        ZurbriggAdvancedPlayblastUtils.set_logo_path(self.logo_path_le.text())
 
         self.logo_path_updated.emit()  # pylint: disable=E1101
 
@@ -3054,17 +3103,17 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         self.collapsed_state_changed.emit()  # pylint: disable=E1101
 
     def refresh_settings(self):
-        self.ffmpeg_path_le.setText(ConestogaPlayblastUtils.get_ffmpeg_path())
-        self.ffmpeg_path_le.setDisabled(ConestogaPlayblastUtils.is_ffmpeg_env_var_set())
+        self.ffmpeg_path_le.setText(ZurbriggAdvancedPlayblastUtils.get_ffmpeg_path())
+        self.ffmpeg_path_le.setDisabled(ZurbriggAdvancedPlayblastUtils.is_ffmpeg_env_var_set())
 
-        self.temp_dir_le.setText(ConestogaPlayblastUtils.get_temp_output_dir_path())
-        self.temp_dir_le.setDisabled(ConestogaPlayblastUtils.is_temp_output_env_var_set())
+        self.temp_dir_le.setText(ZurbriggAdvancedPlayblastUtils.get_temp_output_dir_path())
+        self.temp_dir_le.setDisabled(ZurbriggAdvancedPlayblastUtils.is_temp_output_env_var_set())
 
-        self.temp_file_format_cmb.setCurrentText(ConestogaPlayblastUtils.get_temp_file_format())
-        self.temp_file_format_cmb.setDisabled(ConestogaPlayblastUtils.is_temp_format_env_set())
+        self.temp_file_format_cmb.setCurrentText(ZurbriggAdvancedPlayblastUtils.get_temp_file_format())
+        self.temp_file_format_cmb.setDisabled(ZurbriggAdvancedPlayblastUtils.is_temp_format_env_set())
 
-        self.logo_path_le.setText(ConestogaPlayblastUtils.get_logo_path())
-        self.logo_path_le.setDisabled(ConestogaPlayblastUtils.is_logo_env_var_set())
+        self.logo_path_le.setText(ZurbriggAdvancedPlayblastUtils.get_logo_path())
+        self.logo_path_le.setDisabled(ZurbriggAdvancedPlayblastUtils.is_logo_env_var_set())
 
     def get_collapsed_states(self):
         collapsed = 0
@@ -3081,12 +3130,12 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         self.refresh_settings()
 
 
-class ConestogaPlayblastUi(QtWidgets.QWidget):
+class ZurbriggAdvancedPlayblastUi(QtWidgets.QWidget):
 
-    WINDOW_TITLE = "Conestoga Playblast"
-    UI_NAME = "ConestogaPlayblast"
+    WINDOW_TITLE = "Zurbrigg Advanced Playblast"
+    UI_NAME = "ZurbriggAdvancedPlayblast"
 
-    OPT_VAR_GROUP_STATE = "cstgAPGroupState"
+    OPT_VAR_GROUP_STATE = "zurAPGroupState"
 
     ui_instance = None
 
@@ -3096,19 +3145,19 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         if cls.ui_instance:
             cls.ui_instance.show_workspace_control()
         else:
-            if ConestogaPlayblastUtils.load_plugin():
-                cls.ui_instance = ConestogaPlayblastUi()
+            if ZurbriggAdvancedPlayblastUtils.load_plugin():
+                cls.ui_instance = ZurbriggAdvancedPlayblastUi()
 
     @classmethod
     def get_workspace_control_name(cls):
         return "{0}WorkspaceControl".format(cls.UI_NAME)
 
     def __init__(self):
-        super(ConestogaPlayblastUi, self).__init__()
+        super(ZurbriggAdvancedPlayblastUi, self).__init__()
 
-        self.setObjectName(ConestogaPlayblastUi.UI_NAME)
+        self.setObjectName(ZurbriggAdvancedPlayblastUi.UI_NAME)
 
-        self.setMinimumWidth(int(400 * ConestogaPlayblastUtils.dpi_real_scale_value()))
+        self.setMinimumWidth(int(400 * ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()))
 
         self._batch_playblast_dialog = None
 
@@ -3122,12 +3171,12 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         self.main_tab_wdg.setCurrentIndex(0)
 
     def create_widgets(self):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        scale_value = ZurbriggAdvancedPlayblastUtils.dpi_real_scale_value()
         button_width = int(120 * scale_value)
         button_height = int(40 * scale_value)
         batch_button_width = int(40 * scale_value)
 
-        self.playblast_wdg = ConestogaPlayblastWidget()
+        self.playblast_wdg = ZurbriggPlayblastWidget()
         self.playblast_wdg.setAutoFillBackground(True)
 
         playblast_scroll_area = QtWidgets.QScrollArea()
@@ -3136,7 +3185,7 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         playblast_scroll_area.setWidgetResizable(True)
         playblast_scroll_area.setWidget(self.playblast_wdg)
 
-        self.shot_mask_wdg = ConestogaShotMaskWidget()
+        self.shot_mask_wdg = ZurbriggShotMaskWidget()
         self.shot_mask_wdg.setAutoFillBackground(True)
 
         shot_mask_scroll_area = QtWidgets.QScrollArea()
@@ -3145,7 +3194,7 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         shot_mask_scroll_area.setWidgetResizable(True)
         shot_mask_scroll_area.setWidget(self.shot_mask_wdg)
 
-        self.settings_wdg = ConestogaPlayblastSettingsWidget()
+        self.settings_wdg = ZurbriggAdvancedPlayblastSettingsWidget()
         self.settings_wdg.setAutoFillBackground(True)
 
         settings_scroll_area = QtWidgets.QScrollArea()
@@ -3201,7 +3250,7 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         status_bar_layout = QtWidgets.QHBoxLayout()
         status_bar_layout.setContentsMargins(4, 6, 4, 0)
         status_bar_layout.addStretch()
-        status_bar_layout.addWidget(QtWidgets.QLabel("v{0}".format(ConestogaPlayblastUtils.get_version())))
+        status_bar_layout.addWidget(QtWidgets.QLabel("v{0}".format(ZurbriggAdvancedPlayblastUtils.get_version())))
 
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(6, 6, 6, 0)
@@ -3224,15 +3273,15 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         self.batch_playblast_btn.clicked.connect(self.show_batch_playblast_dialog)
 
     def create_workspace_control(self):
-        self.workspace_control_instance = ConestogaWorkspaceControl(self.get_workspace_control_name())
+        self.workspace_control_instance = ZurbriggWorkspaceControl(self.get_workspace_control_name())
         if self.workspace_control_instance.exists():
             self.workspace_control_instance.restore(self)
         else:
-            self.workspace_control_instance.create(self.WINDOW_TITLE, self, ui_script="from conestoga_playblast_ui import ConestogaPlayblastUi\nConestogaPlayblastUi.display()")
+            self.workspace_control_instance.create(self.WINDOW_TITLE, self, ui_script="from zurbrigg_advanced_playblast_ui import ZurbriggAdvancedPlayblastUi\nZurbriggAdvancedPlayblastUi.display()")
 
     def show_batch_playblast_dialog(self):
         if not self._batch_playblast_dialog:
-            self._batch_playblast_dialog = ConestogaCameraSelectDialog(self)
+            self._batch_playblast_dialog = ZurbriggCameraSelectDialog(self)
             self._batch_playblast_dialog.setWindowTitle("Batch Playblast")
             self._batch_playblast_dialog.set_multi_select_enabled(True)
             self._batch_playblast_dialog.set_camera_list_text("Select one or more cameras:")
@@ -3256,13 +3305,13 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
             self.playblast_wdg.log_warning("No cameras selected for batch playblast.")
 
     def on_collapsed_state_changed(self):
-        cmds.optionVar(iv=[ConestogaPlayblastUi.OPT_VAR_GROUP_STATE, self.playblast_wdg.get_collapsed_states()])
-        cmds.optionVar(iva=[ConestogaPlayblastUi.OPT_VAR_GROUP_STATE, self.shot_mask_wdg.get_collapsed_states()])
-        cmds.optionVar(iva=[ConestogaPlayblastUi.OPT_VAR_GROUP_STATE, self.settings_wdg.get_collapsed_states()])
+        cmds.optionVar(iv=[ZurbriggAdvancedPlayblastUi.OPT_VAR_GROUP_STATE, self.playblast_wdg.get_collapsed_states()])
+        cmds.optionVar(iva=[ZurbriggAdvancedPlayblastUi.OPT_VAR_GROUP_STATE, self.shot_mask_wdg.get_collapsed_states()])
+        cmds.optionVar(iva=[ZurbriggAdvancedPlayblastUi.OPT_VAR_GROUP_STATE, self.settings_wdg.get_collapsed_states()])
 
     def restore_collaspsed_states(self):
-        if cmds.optionVar(exists=ConestogaPlayblastUi.OPT_VAR_GROUP_STATE):
-            collasped_states = cmds.optionVar(q=ConestogaPlayblastUi.OPT_VAR_GROUP_STATE)
+        if cmds.optionVar(exists=ZurbriggAdvancedPlayblastUi.OPT_VAR_GROUP_STATE):
+            collasped_states = cmds.optionVar(q=ZurbriggAdvancedPlayblastUi.OPT_VAR_GROUP_STATE)
 
             self.playblast_wdg.set_collapsed_states(collasped_states[0])
             self.shot_mask_wdg.set_collapsed_states(collasped_states[1])
@@ -3283,62 +3332,14 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
             if self.playblast_wdg.isVisible():
                 self.playblast_wdg.save_settings()
 
-        return super(ConestogaPlayblastUi, self).event(e)
+        return super(ZurbriggAdvancedPlayblastUi, self).event(e)
 
 
 if __name__ == "__main__":
 
-    if ConestogaPlayblastUtils.load_plugin():
-        workspace_control_name = ConestogaPlayblastUi.get_workspace_control_name()
+    if ZurbriggAdvancedPlayblastUtils.load_plugin():
+        workspace_control_name = ZurbriggAdvancedPlayblastUi.get_workspace_control_name()
         if cmds.window(workspace_control_name, exists=True):
             cmds.deleteUI(workspace_control_name)
 
-        cstg_test_ui = ConestogaPlayblastUi()
-
-    def on_border_aspect_ratio_enabled_changed(self):
-        enabled = self.frame_border_to_aspect_ratio_cb.isChecked()
-        if enabled:
-            self.border_size_type_text.setText("Aspect Ratio")
-        else:
-            self.border_size_type_text.setText("Scale")
-
-        self.border_aspect_ratio_dsb.setVisible(enabled)
-        self.border_scale_dsb.setHidden(enabled)
-
-        self.update_mask()
-
-    def on_collapsed_state_changed(self):
-        self.collapsed_state_changed.emit()  # pylint: disable=E1101
-
-    def get_collapsed_states(self):
-        collapsed = 0
-        collapsed += int(self.labels_grp.is_collapsed())
-        collapsed += int(self.text_grp.is_collapsed()) << 1
-        collapsed += int(self.borders_grp.is_collapsed()) << 2
-        collapsed += int(self.counter_grp.is_collapsed()) << 3
-
-        return collapsed
-
-    def set_collapsed_states(self, collapsed):
-        self.labels_grp.set_collapsed(collapsed & 1)
-        self.text_grp.set_collapsed(collapsed & 2)
-        self.borders_grp.set_collapsed(collapsed & 4)
-        self.counter_grp.set_collapsed(collapsed & 8)
-
-    def show_font_select_dialog(self):
-        current_font = QtGui.QFont(self.font_le.text())
-
-        font = QtWidgets.QFontDialog.getFont(current_font, self)
-
-        # Order of the tuple returned by getFont changed in newer versions of Qt
-        if type(font[0]) == bool:
-            ok = font[0]
-            family = font[1].family()
-        else:
-            family = font[0].family()
-            ok = font[1]
-
-        if(ok):
-            self.font_le.setText(family)
-
-            self.update_mask()
+        zap_test_ui = ZurbriggAdvancedPlayblastUi()
