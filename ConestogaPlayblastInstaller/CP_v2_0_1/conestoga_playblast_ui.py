@@ -1562,6 +1562,13 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     OPT_VAR_LOG_TO_SCRIPT_EDITOR = "cstgPlayblastLogToSE"
 
+    # New option vars for name generator
+    OPT_VAR_ASSIGNMENT_NUMBER = "cstgPlayblastAssignmentNumber"
+    OPT_VAR_LAST_NAME = "cstgPlayblastLastName"
+    OPT_VAR_FIRST_NAME = "cstgPlayblastFirstName"
+    OPT_VAR_VERSION_TYPE = "cstgPlayblastVersionType"
+    OPT_VAR_VERSION_NUMBER = "cstgPlayblastVersionNumber"
+
     CONTAINER_PRESETS = [
         "mov",
         "mp4",
@@ -1610,6 +1617,33 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.output_filename_le.setPlaceholderText("{scene}_{timestamp}")
         self.output_filename_le.setMaximumWidth(int(200 * scale_value))
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
+
+        # Name Generator widgets
+        self.assignmentSpinBox = QtWidgets.QSpinBox()
+        self.assignmentSpinBox.setRange(1, 99)
+        self.assignmentSpinBox.setValue(1)
+        self.assignmentSpinBox.setFixedWidth(50)
+
+        self.lastnameLineEdit = QtWidgets.QLineEdit()
+        self.lastnameLineEdit.setPlaceholderText("Last Name")
+
+        self.firstnameLineEdit = QtWidgets.QLineEdit()
+        self.firstnameLineEdit.setPlaceholderText("First Name")
+
+        self.versionTypeCombo = QtWidgets.QComboBox()
+        self.versionTypeCombo.addItems(["wip", "final"])
+
+        self.versionNumberSpinBox = QtWidgets.QSpinBox()
+        self.versionNumberSpinBox.setRange(1, 99)
+        self.versionNumberSpinBox.setValue(1)
+        self.versionNumberSpinBox.setFixedWidth(50)
+
+        self.filenamePreviewLabel = QtWidgets.QLabel("A1_LastName_FirstName_wip_01.mov")
+        self.filenamePreviewLabel.setStyleSheet("color: yellow; font-weight: bold;")
+
+        self.generateFilenameButton = QtWidgets.QPushButton("Generate Filename")
+
+        # End of Name Generator widgets
 
         self.resolution_select_cmb = QtWidgets.QComboBox()
         self.resolution_select_cmb.setMinimumWidth(combo_box_min_width)
@@ -1717,6 +1751,69 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         output_layout.addLayoutRow(0, "Output Dir:", output_path_layout)
         output_layout.addLayoutRow(1, "Filename:", output_file_layout)
 
+        # Add Name Generator layout
+        nameGenFrame = QtWidgets.QGroupBox("Output Name Generator")
+        nameGenLayout = QtWidgets.QVBoxLayout(nameGenFrame)
+        
+        # Assignment, Last Name, First Name, Version Type, Version Number
+        nameGenInputLayout = QtWidgets.QHBoxLayout()
+        
+        # Assignment field
+        assignmentLayout = QtWidgets.QHBoxLayout()
+        assignmentLabel = QtWidgets.QLabel("A")
+        assignmentLayout.addWidget(assignmentLabel)
+        assignmentLayout.addWidget(self.assignmentSpinBox)
+        
+        # Last Name field
+        lastnameLayout = QtWidgets.QHBoxLayout()
+        lastnameLabel = QtWidgets.QLabel("Last Name:")
+        lastnameLayout.addWidget(lastnameLabel)
+        lastnameLayout.addWidget(self.lastnameLineEdit)
+        
+        # First Name field
+        firstnameLayout = QtWidgets.QHBoxLayout()
+        firstnameLabel = QtWidgets.QLabel("First Name:")
+        firstnameLayout.addWidget(firstnameLabel)
+        firstnameLayout.addWidget(self.firstnameLineEdit)
+        
+        # Version type dropdown
+        versionTypeLayout = QtWidgets.QHBoxLayout()
+        versionTypeLabel = QtWidgets.QLabel("Type:")
+        versionTypeLayout.addWidget(versionTypeLabel)
+        versionTypeLayout.addWidget(self.versionTypeCombo)
+        
+        # Version number
+        versionNumberLayout = QtWidgets.QHBoxLayout()
+        versionNumberLabel = QtWidgets.QLabel("Version:")
+        versionNumberLayout.addWidget(versionNumberLabel)
+        versionNumberLayout.addWidget(self.versionNumberSpinBox)
+        
+        # Add all controls to the input layout
+        nameGenInputLayout.addLayout(assignmentLayout)
+        nameGenInputLayout.addLayout(lastnameLayout)
+        nameGenInputLayout.addLayout(firstnameLayout)
+        nameGenInputLayout.addLayout(versionTypeLayout)
+        nameGenInputLayout.addLayout(versionNumberLayout)
+        
+        # Preview field
+        previewLayout = QtWidgets.QHBoxLayout()
+        previewLabel = QtWidgets.QLabel("Preview:")
+        previewLayout.addWidget(previewLabel)
+        previewLayout.addWidget(self.filenamePreviewLabel)
+        
+        # Generate button
+        generateLayout = QtWidgets.QHBoxLayout()
+        generateLayout.addWidget(self.generateFilenameButton)
+        
+        # Add layouts to the main name generator layout
+        nameGenLayout.addLayout(nameGenInputLayout)
+        nameGenLayout.addLayout(previewLayout)
+        nameGenLayout.addLayout(generateLayout)
+        
+        # Add name generator to main layout
+        output_layout.addWidgetRow(2, "", nameGenFrame)
+        
+        # Continue with the rest of the layouts
         camera_options_layout = QtWidgets.QHBoxLayout()
         camera_options_layout.setSpacing(6)
         camera_options_layout.addWidget(self.camera_select_cmb)
@@ -1804,6 +1901,18 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.output_dir_path_select_btn.clicked.connect(self.select_output_directory)
         self.output_dir_path_show_folder_btn.clicked.connect(self.open_output_directory)
 
+        # Name Generator connections
+        self.assignmentSpinBox.valueChanged.connect(self.update_filename_preview)
+        self.lastnameLineEdit.textChanged.connect(self.update_filename_preview)
+        self.firstnameLineEdit.textChanged.connect(self.update_filename_preview)
+        self.versionTypeCombo.currentTextChanged.connect(self.update_filename_preview)
+        self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
+        self.generateFilenameButton.clicked.connect(self.generate_filename)
+        
+        # Artist name update from first/last name
+        self.lastnameLineEdit.textChanged.connect(self.update_artist_name)
+        self.firstnameLineEdit.textChanged.connect(self.update_artist_name)
+
         self.camera_select_cmb.currentTextChanged.connect(self.on_camera_changed)
         self.camera_select_hide_defaults_cb.toggled.connect(self.refresh_cameras)
 
@@ -1829,6 +1938,50 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
         self.options_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
         self.logging_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
+    
+    # Name Generator Methods
+    def update_filename_preview(self):
+        """
+        Update the filename preview label based on current inputs.
+        """
+        assignment = self.assignmentSpinBox.value()
+        lastname = self.lastnameLineEdit.text() or "LastName" 
+        firstname = self.firstnameLineEdit.text() or "FirstName"
+        version_type = self.versionTypeCombo.currentText()
+        version_number = str(self.versionNumberSpinBox.value()).zfill(2)
+        
+        # Use * for preview but _ for actual filename
+        filename = f"A{assignment}*{lastname}*{firstname}*{version_type}*{version_number}.mov"
+        self.filenamePreviewLabel.setText(filename)
+
+    def generate_filename(self):
+        """
+        Generate a filename from the inputs and place it in the output field.
+        """
+        assignment = self.assignmentSpinBox.value()
+        lastname = self.lastnameLineEdit.text()
+        firstname = self.firstnameLineEdit.text()
+        version_type = self.versionTypeCombo.currentText()
+        version_number = str(self.versionNumberSpinBox.value()).zfill(2)
+        
+        if not lastname or not firstname:
+            QtWidgets.QMessageBox.warning(self, "Missing Information", 
+                                        "Please enter both last name and first name.")
+            return
+        
+        # Use underscores for the actual file
+        filename = f"A{assignment}_{lastname}_{firstname}_{version_type}_{version_number}.mov"
+        self.output_filename_le.setText(filename)
+
+    def update_artist_name(self):
+        """
+        This function would update an artist name field if available in the UI.
+        For this integration, we'll check if there is a HUD checkbox or user name field.
+        """
+        # This function would be useful if the UI has a field for artist name display
+        # Since the original Conestoga Playblast UI doesn't have this field,
+        # this is a placeholder for possible future integration
+        pass
 
     def do_playblast(self, batch_cameras=[]):
         output_dir_path = self.output_dir_path_le.text()
@@ -2089,6 +2242,13 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_OUTPUT_FILENAME, self.output_filename_le.text()))
         cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE, self.force_overwrite_cb.isChecked()))
 
+        # Save name generator settings
+        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_ASSIGNMENT_NUMBER, self.assignmentSpinBox.value()))
+        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_LAST_NAME, self.lastnameLineEdit.text()))
+        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_FIRST_NAME, self.firstnameLineEdit.text()))
+        cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_VERSION_TYPE, self.versionTypeCombo.currentText()))
+        cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_VERSION_NUMBER, self.versionNumberSpinBox.value()))
+
         cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_CAMERA, self.camera_select_cmb.currentText()))
         cmds.optionVar(iv=(ConestogaPlayblastWidget.OPT_VAR_HIDE_DEFAULT_CAMERAS, self.camera_select_hide_defaults_cb.isChecked()))
 
@@ -2135,6 +2295,18 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
             self.output_filename_le.setText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_OUTPUT_FILENAME))
         if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE):
             self.force_overwrite_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FORCE_OVERWRITE))
+
+        # Load name generator settings
+        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_ASSIGNMENT_NUMBER):
+            self.assignmentSpinBox.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_ASSIGNMENT_NUMBER))
+        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_LAST_NAME):
+            self.lastnameLineEdit.setText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_LAST_NAME))
+        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_FIRST_NAME):
+            self.firstnameLineEdit.setText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_FIRST_NAME))
+        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_VERSION_TYPE):
+            self.versionTypeCombo.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_VERSION_TYPE))
+        if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_VERSION_NUMBER):
+            self.versionNumberSpinBox.setValue(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_VERSION_NUMBER))
 
         if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_CAMERA):
             self.camera_select_cmb.setCurrentText(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_CAMERA))
@@ -2198,6 +2370,9 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         if cmds.optionVar(exists=ConestogaPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR):
             self.log_to_script_editor_cb.setChecked(cmds.optionVar(q=ConestogaPlayblastWidget.OPT_VAR_LOG_TO_SCRIPT_EDITOR))
 
+        # Update filename preview after loading
+        self.update_filename_preview()
+
     def append_output(self, text):
         self.output_edit.appendPlainText(text)
 
@@ -2209,6 +2384,13 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.output_dir_path_le.setText("")
         self.output_filename_le.setText("")
         self.force_overwrite_cb.setChecked(False)
+
+        # Reset name generator settings
+        self.assignmentSpinBox.setValue(1)
+        self.lastnameLineEdit.setText("")
+        self.firstnameLineEdit.setText("")
+        self.versionTypeCombo.setCurrentText("wip")
+        self.versionNumberSpinBox.setValue(1)
 
         self.camera_select_cmb.setCurrentIndex(0)
         self.camera_select_hide_defaults_cb.setChecked(False)
