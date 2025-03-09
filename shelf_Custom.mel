@@ -1,0 +1,78 @@
+global proc shelf_Custom () {
+    global string $gBuffStr;
+    global string $gBuffStr0;
+    global string $gBuffStr1;
+
+
+    shelfButton
+        -enableCommandRepeat 1
+        -flexibleWidthType 3
+        -flexibleWidthValue 32
+        -enable 1
+        -width 35
+        -height 34
+        -manage 1
+        -visible 1
+        -preventOverride 0
+        -annotation "import conestoga_playblast\nconestoga_playblast.show_ui()" 
+        -enableBackground 0
+        -backgroundColor 0 0 0 
+        -highlightColor 0.321569 0.521569 0.65098 
+        -align "center" 
+        -label "CP" 
+        -labelOffset 0
+        -rotation 0
+        -flipX 0
+        -flipY 0
+        -useAlpha 1
+        -font "plainLabelFont" 
+        -imageOverlayLabel "CP" 
+        -overlayLabelColor 0.8 0.8 0.8 
+        -overlayLabelBackColor 0 0 0 0.5 
+        -image "pythonFamily.png" 
+        -image1 "pythonFamily.png" 
+        -style "iconOnly" 
+        -marginWidth 0
+        -marginHeight 1
+        -command "import conestoga_playblast\nconestoga_playblast.show_ui()" 
+        -sourceType "python" 
+        -commandRepeatable 1
+        -flat 1
+    ;
+    shelfButton
+        -enableCommandRepeat 1
+        -flexibleWidthType 3
+        -flexibleWidthValue 32
+        -enable 1
+        -width 35
+        -height 34
+        -manage 1
+        -visible 1
+        -preventOverride 0
+        -annotation "import os\nimport sys\nimport maya.cmds as cmds\n\ndef install_conestoga_playblast():\n    \"\"\"\n    Install the Conestoga Playblast tool by dynamically finding and running the installer.\n    \"\"\"\n    # Get the user's home directory dynamically (works for any username)\n    home_dir = os.path.expanduser(\"~\")\n    \n    # Construct the path to the ConestogaPlayblastInstaller directory\n    # This builds the path: C:\\Users\\[username]\\Documents\\maya\\scripts\\ConestogaPlayblastInstaller\n    installer_path = os.path.join(home_dir, \"Documents\", \"maya\", \"scripts\", \"ConestogaPlayblastInstaller\")\n    \n    # Normalize the path to ensure consistent formatting\n    installer_path = os.path.normpath(installer_path)\n    \n    print(f\"Looking for installer at: {installer_path}\")\n    \n    # Check if the directory exists\n    if not os.path.exists(installer_path):\n        raise RuntimeError(f\"Installer directory not found at: {installer_path}\")\n    \n    if not os.path.isdir(installer_path):\n        raise RuntimeError(f\"Found path is not a directory: {installer_path}\")\n    \n    # Add the installer directory to the Python path if needed\n    if installer_path not in sys.path:\n        sys.path.append(installer_path)\n    \n    # List the files in the directory to help with debugging\n    print(f\"Files in the installer directory:\")\n    for item in os.listdir(installer_path):\n        print(f\"- {item}\")\n    \n    # Import and run the installer\n    try:\n        print(\"Importing installer module...\")\n        import conestoga_playblast_installer\n        \n        print(\"Running installer...\")\n        conestoga_playblast_installer.install()\n        \n        print(f\"Installation completed successfully!\")\n        return True\n        \n    except ImportError as e:\n        raise RuntimeError(f\"Could not import conestoga_playblast_installer. Error: {str(e)}\")\n        \n    except Exception as e:\n        print(f\"Error during installation: {str(e)}\")\n        import traceback\n        traceback.print_exc()\n        return False\n\n# Run the installer\ninstall_conestoga_playblast()" 
+        -enableBackground 0
+        -backgroundColor 0 0 0 
+        -highlightColor 0.321569 0.521569 0.65098 
+        -align "center" 
+        -label "install" 
+        -labelOffset 0
+        -rotation 0
+        -flipX 0
+        -flipY 0
+        -useAlpha 1
+        -font "plainLabelFont" 
+        -imageOverlayLabel "install" 
+        -overlayLabelColor 0.8 0.8 0.8 
+        -overlayLabelBackColor 0 0 0 0.5 
+        -image "pythonFamily.png" 
+        -image1 "pythonFamily.png" 
+        -style "iconOnly" 
+        -marginWidth 0
+        -marginHeight 1
+        -command "import os\nimport sys\nimport maya.cmds as cmds\n\ndef install_conestoga_playblast():\n    \"\"\"\n    Install the Conestoga Playblast tool by dynamically finding and running the installer.\n    \"\"\"\n    # Get the user's home directory dynamically (works for any username)\n    home_dir = os.path.expanduser(\"~\")\n    \n    # Construct the path to the ConestogaPlayblastInstaller directory\n    # This builds the path: C:\\Users\\[username]\\Documents\\maya\\scripts\\ConestogaPlayblastInstaller\n    installer_path = os.path.join(home_dir, \"Documents\", \"maya\", \"scripts\", \"ConestogaPlayblastInstaller\")\n    \n    # Normalize the path to ensure consistent formatting\n    installer_path = os.path.normpath(installer_path)\n    \n    print(f\"Looking for installer at: {installer_path}\")\n    \n    # Check if the directory exists\n    if not os.path.exists(installer_path):\n        raise RuntimeError(f\"Installer directory not found at: {installer_path}\")\n    \n    if not os.path.isdir(installer_path):\n        raise RuntimeError(f\"Found path is not a directory: {installer_path}\")\n    \n    # Add the installer directory to the Python path if needed\n    if installer_path not in sys.path:\n        sys.path.append(installer_path)\n    \n    # List the files in the directory to help with debugging\n    print(f\"Files in the installer directory:\")\n    for item in os.listdir(installer_path):\n        print(f\"- {item}\")\n    \n    # Import and run the installer\n    try:\n        print(\"Importing installer module...\")\n        import conestoga_playblast_installer\n        \n        print(\"Running installer...\")\n        conestoga_playblast_installer.install()\n        \n        print(f\"Installation completed successfully!\")\n        return True\n        \n    except ImportError as e:\n        raise RuntimeError(f\"Could not import conestoga_playblast_installer. Error: {str(e)}\")\n        \n    except Exception as e:\n        print(f\"Error during installation: {str(e)}\")\n        import traceback\n        traceback.print_exc()\n        return False\n\n# Run the installer\ninstall_conestoga_playblast()" 
+        -sourceType "python" 
+        -commandRepeatable 1
+        -flat 1
+    ;
+
+} 
