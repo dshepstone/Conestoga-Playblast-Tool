@@ -1,3 +1,8 @@
+"""Conestoga Playblast Tool - UI Module
+Updated to use native Qt widgets (LineEditWithTags and ColorButton) instead of the old Zurbrigg classes.
+Enhanced for Conestoga College.
+"""
+
 import os
 import sys
 import time
@@ -10,34 +15,81 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from shiboken6 import wrapInstance
 import traceback
 
-# --- Minimal Zurbrigg Classes Definitions ---
-class ZurbriggLineEdit(QtWidgets.QLineEdit):
+# --- New Native Widget Implementations ---
+
+class LineEditWithTags(QtWidgets.QLineEdit):
+    """LineEdit with support for tag insertion via context menu."""
     TYPE_PLAYBLAST_OUTPUT_PATH = 1
     TYPE_PLAYBLAST_OUTPUT_FILENAME = 2
     TYPE_SHOT_MASK_LABEL = 3
 
     def __init__(self, type_val, parent=None):
-        super(ZurbriggLineEdit, self).__init__(parent)
+        super(LineEditWithTags, self).__init__(parent)
         self.type_val = type_val
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
 
-class ZurbriggColorButton(QtWidgets.QPushButton):
+    def show_context_menu(self, pos):
+        menu = self.createStandardContextMenu()
+        menu.addSeparator()
+        tag_menu = QtWidgets.QMenu("Insert Tag", menu)
+        if self.type_val == self.TYPE_PLAYBLAST_OUTPUT_PATH:
+            tag_menu.addAction("{project}").triggered.connect(lambda: self.insert_tag("{project}"))
+            tag_menu.addAction("{temp}").triggered.connect(lambda: self.insert_tag("{temp}"))
+        elif self.type_val == self.TYPE_PLAYBLAST_OUTPUT_FILENAME:
+            tag_menu.addAction("{scene}").triggered.connect(lambda: self.insert_tag("{scene}"))
+            tag_menu.addAction("{camera}").triggered.connect(lambda: self.insert_tag("{camera}"))
+            tag_menu.addAction("{timestamp}").triggered.connect(lambda: self.insert_tag("{timestamp}"))
+            tag_menu.addAction("{date}").triggered.connect(lambda: self.insert_tag("{date}"))
+        elif self.type_val == self.TYPE_SHOT_MASK_LABEL:
+            tag_menu.addAction("{scene}").triggered.connect(lambda: self.insert_tag("{scene}"))
+            tag_menu.addAction("{camera}").triggered.connect(lambda: self.insert_tag("{camera}"))
+            tag_menu.addAction("{counter}").triggered.connect(lambda: self.insert_tag("{counter}"))
+            tag_menu.addAction("{fps}").triggered.connect(lambda: self.insert_tag("{fps}"))
+            tag_menu.addAction("{date}").triggered.connect(lambda: self.insert_tag("{date}"))
+            tag_menu.addAction("{username}").triggered.connect(lambda: self.insert_tag("{username}"))
+        menu.addMenu(tag_menu)
+        menu.exec_(self.mapToGlobal(pos))
+
+    def insert_tag(self, tag):
+        self.insert(tag)
+
+
+class ColorButton(QtWidgets.QPushButton):
+    """Button that shows a color and opens a color picker dialog when clicked."""
+    color_changed = QtCore.Signal(tuple)
+
     def __init__(self, color=(1.0, 1.0, 1.0), parent=None):
-        super(ZurbriggColorButton, self).__init__(parent)
+        super(ColorButton, self).__init__(parent)
         self._color = color
-        self.setText("Color")
-        # Optionally, set a background color for visual feedback
-        self.setStyleSheet("background-color: rgb(%d, %d, %d);" % 
-                           (int(color[0]*255), int(color[1]*255), int(color[2]*255)))
+        self.update_button_color()
+        self.clicked.connect(self.choose_color)
+
     def get_color(self):
         return self._color
-    def set_color(self, color):
-        self._color = color
-        self.setStyleSheet("background-color: rgb(%d, %d, %d);" % 
-                           (int(color[0]*255), int(color[1]*255), int(color[2]*255)))
 
-class ZurbriggFormLayout(QtWidgets.QFormLayout):
-    pass
-# --- End Minimal Zurbrigg Classes ---
+    def set_color(self, color):
+        if self._color != color:
+            self._color = color
+            self.update_button_color()
+            self.color_changed.emit(color)
+
+    def update_button_color(self):
+        r, g, b = [int(c * 255) for c in self._color]
+        text_color = "black" if sum(self._color) > 1.5 else "white"
+        self.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); color: {text_color};")
+
+    def choose_color(self):
+        current_color = QtGui.QColor(int(self._color[0] * 255),
+                                     int(self._color[1] * 255),
+                                     int(self._color[2] * 255))
+        color = QtWidgets.QColorDialog.getColor(current_color, self, "Choose Color", QtWidgets.QColorDialog.ShowAlphaChannel)
+        if color.isValid():
+            new_color = (color.red() / 255.0, color.green() / 255.0, color.blue() / 255.0)
+            self.set_color(new_color)
+
+# --- End of new widget implementations ---
+# (The old Zurbrigg minimal classes have been removed)
 
 class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -91,14 +143,14 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         # Output directory
         self.output_dir_label = QtWidgets.QLabel("Output Directory:")
-        self.output_dir_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
+        self.output_dir_le = LineEditWithTags(LineEditWithTags.TYPE_PLAYBLAST_OUTPUT_PATH)
         self.output_dir_le.setPlaceholderText("{project}/movies")
         self.output_dir_select_btn = QtWidgets.QPushButton("...")
         self.output_dir_show_folder_btn = QtWidgets.QPushButton("Open")
         
         # Output filename
         self.output_filename_label = QtWidgets.QLabel("Filename:")
-        self.output_filename_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
+        self.output_filename_le = LineEditWithTags(LineEditWithTags.TYPE_PLAYBLAST_OUTPUT_FILENAME)
         self.output_filename_le.setPlaceholderText("{scene}_{timestamp}")
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
         
@@ -328,28 +380,28 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         
         # Top Labels
         self.top_left_label = QtWidgets.QLabel("Top Left:")
-        self.top_left_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.top_left_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.top_left_le.setText("Scene: {scene}")
         
         self.top_center_label = QtWidgets.QLabel("Top Center:")
-        self.top_center_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.top_center_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.top_center_le.setText("")
         
         self.top_right_label = QtWidgets.QLabel("Top Right:")
-        self.top_right_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.top_right_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.top_right_le.setText("FPS: {fps}")
         
         # Bottom Labels
         self.bottom_left_label = QtWidgets.QLabel("Bottom Left:")
-        self.bottom_left_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.bottom_left_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.bottom_left_le.setText("Artist: {username}")
         
         self.bottom_center_label = QtWidgets.QLabel("Bottom Center:")
-        self.bottom_center_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.bottom_center_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.bottom_center_le.setText("Date: {date}")
         
         self.bottom_right_label = QtWidgets.QLabel("Bottom Right:")
-        self.bottom_right_le = ZurbriggLineEdit(ZurbriggLineEdit.TYPE_SHOT_MASK_LABEL)
+        self.bottom_right_le = LineEditWithTags(LineEditWithTags.TYPE_SHOT_MASK_LABEL)
         self.bottom_right_le.setText("Frame: {counter}")
         
         # Add to layout
@@ -378,7 +430,7 @@ class ConestoggZurbriggPlayblastDialog(QtWidgets.QWidget):
         self.bottom_border_cb.setChecked(True)
         
         self.border_color_label = QtWidgets.QLabel("Border Color:")
-        self.border_color_btn = ZurbriggColorButton((0.0, 0.0, 0.0))
+        self.border_color_btn = ColorButton((0.0, 0.0, 0.0))
         
         self.border_scale_label = QtWidgets.QLabel("Border Scale:")
         self.border_scale_spinbox = QtWidgets.QDoubleSpinBox()
