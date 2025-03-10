@@ -1735,85 +1735,77 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.clear_btn.setFixedHeight(button_height)
 
     def create_layouts(self):
+        # Create output path layout (spanning full width)
         output_path_layout = QtWidgets.QHBoxLayout()
         output_path_layout.setSpacing(2)
         output_path_layout.addWidget(self.output_dir_path_le)
         output_path_layout.addWidget(self.output_dir_path_select_btn)
         output_path_layout.addWidget(self.output_dir_path_show_folder_btn)
 
+        # Create output file layout (spanning full width)
         output_file_layout = QtWidgets.QHBoxLayout()
         output_file_layout.setSpacing(4)
         output_file_layout.addWidget(self.output_filename_le)
         output_file_layout.addWidget(self.force_overwrite_cb)
 
+        # Create form layout for output fields (spanning full width)
         output_layout = ConestogaFormLayout()
         output_layout.setContentsMargins(4, 14, 4, 14)
         output_layout.addLayoutRow(0, "Output Dir:", output_path_layout)
         output_layout.addLayoutRow(1, "Filename:", output_file_layout)
 
-        # Add Name Generator layout
-        nameGenFrame = QtWidgets.QGroupBox("Output Name Generator")
-        nameGenLayout = QtWidgets.QVBoxLayout(nameGenFrame)
+        # Create Name Generator section (spanning full width)
+        name_gen_layout = QtWidgets.QVBoxLayout()
+        name_gen_layout.setContentsMargins(4, 0, 4, 14)
         
-        # Assignment, Last Name, First Name, Version Type, Version Number
-        nameGenInputLayout = QtWidgets.QHBoxLayout()
+        # Add title for name generator
+        name_gen_title = QtWidgets.QLabel("Output Name Generator")
+        name_gen_title.setStyleSheet("font-weight: bold;")
+        name_gen_layout.addWidget(name_gen_title)
+        
+        # Create grid layout for name generator fields
+        name_gen_grid = QtWidgets.QGridLayout()
+        name_gen_grid.setColumnStretch(2, 1)  # Make the third column stretch
         
         # Assignment field
-        assignmentLayout = QtWidgets.QHBoxLayout()
-        assignmentLabel = QtWidgets.QLabel("A")
-        assignmentLayout.addWidget(assignmentLabel)
-        assignmentLayout.addWidget(self.assignmentSpinBox)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Assignment:"), 0, 0)
+        name_gen_grid.addWidget(self.assignmentSpinBox, 0, 1)
         
         # Last Name field
-        lastnameLayout = QtWidgets.QHBoxLayout()
-        lastnameLabel = QtWidgets.QLabel("Last Name:")
-        lastnameLayout.addWidget(lastnameLabel)
-        lastnameLayout.addWidget(self.lastnameLineEdit)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Last Name:"), 1, 0)
+        name_gen_grid.addWidget(self.lastnameLineEdit, 1, 1, 1, 2)
         
         # First Name field
-        firstnameLayout = QtWidgets.QHBoxLayout()
-        firstnameLabel = QtWidgets.QLabel("First Name:")
-        firstnameLayout.addWidget(firstnameLabel)
-        firstnameLayout.addWidget(self.firstnameLineEdit)
+        name_gen_grid.addWidget(QtWidgets.QLabel("First Name:"), 2, 0)
+        name_gen_grid.addWidget(self.firstnameLineEdit, 2, 1, 1, 2)
         
         # Version type dropdown
-        versionTypeLayout = QtWidgets.QHBoxLayout()
-        versionTypeLabel = QtWidgets.QLabel("Type:")
-        versionTypeLayout.addWidget(versionTypeLabel)
-        versionTypeLayout.addWidget(self.versionTypeCombo)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Type:"), 3, 0)
+        name_gen_grid.addWidget(self.versionTypeCombo, 3, 1)
         
         # Version number
-        versionNumberLayout = QtWidgets.QHBoxLayout()
-        versionNumberLabel = QtWidgets.QLabel("Version:")
-        versionNumberLayout.addWidget(versionNumberLabel)
-        versionNumberLayout.addWidget(self.versionNumberSpinBox)
-        
-        # Add all controls to the input layout
-        nameGenInputLayout.addLayout(assignmentLayout)
-        nameGenInputLayout.addLayout(lastnameLayout)
-        nameGenInputLayout.addLayout(firstnameLayout)
-        nameGenInputLayout.addLayout(versionTypeLayout)
-        nameGenInputLayout.addLayout(versionNumberLayout)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Version:"), 4, 0)
+        name_gen_grid.addWidget(self.versionNumberSpinBox, 4, 1)
         
         # Preview field
-        previewLayout = QtWidgets.QHBoxLayout()
-        previewLabel = QtWidgets.QLabel("Preview:")
-        previewLayout.addWidget(previewLabel)
-        previewLayout.addWidget(self.filenamePreviewLabel)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 5, 0)
+        name_gen_grid.addWidget(self.filenamePreviewLabel, 5, 1, 1, 2)
+        
+        # Add grid to layout
+        name_gen_layout.addLayout(name_gen_grid)
         
         # Generate button
-        generateLayout = QtWidgets.QHBoxLayout()
-        generateLayout.addWidget(self.generateFilenameButton)
+        generate_btn_layout = QtWidgets.QHBoxLayout()
+        generate_btn_layout.addStretch()
+        generate_btn_layout.addWidget(self.generateFilenameButton)
+        generate_btn_layout.addStretch()
+        name_gen_layout.addLayout(generate_btn_layout)
         
-        # Add layouts to the main name generator layout
-        nameGenLayout.addLayout(nameGenInputLayout)
-        nameGenLayout.addLayout(previewLayout)
-        nameGenLayout.addLayout(generateLayout)
-        
-        # Add name generator to main layout
-        output_layout.addWidgetRow(2, "", nameGenFrame)
-        
-        # Continue with the rest of the layouts
+        # Create a collapsible widget for the name generator
+        self.name_gen_grp = ConestogaCollapsibleGrpWidget("Name Generator")
+        self.name_gen_grp.add_layout(name_gen_layout)
+
+        # Continue with the rest of the layouts as before
         camera_options_layout = QtWidgets.QHBoxLayout()
         camera_options_layout.setSpacing(6)
         camera_options_layout.addWidget(self.camera_select_cmb)
@@ -1894,6 +1886,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
         main_layout.addLayout(output_layout)
+        main_layout.addWidget(self.name_gen_grp)  # Add name generator below output fields
         main_layout.addWidget(self.options_grp)
         main_layout.addWidget(self.logging_grp)
 
@@ -2228,14 +2221,16 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def get_collapsed_states(self):
         collapsed = 0
-        collapsed += int(self.options_grp.is_collapsed())
-        collapsed += int(self.logging_grp.is_collapsed()) << 1
+        collapsed += int(self.name_gen_grp.is_collapsed())
+        collapsed += int(self.options_grp.is_collapsed()) << 1
+        collapsed += int(self.logging_grp.is_collapsed()) << 2
 
         return collapsed
 
     def set_collapsed_states(self, collapsed):
-        self.options_grp.set_collapsed(collapsed & 1)
-        self.logging_grp.set_collapsed(collapsed & 2)
+        self.name_gen_grp.set_collapsed(collapsed & 1)
+        self.options_grp.set_collapsed(collapsed & 2)
+        self.logging_grp.set_collapsed(collapsed & 4)
 
     def save_settings(self):
         cmds.optionVar(sv=(ConestogaPlayblastWidget.OPT_VAR_OUTPUT_DIR, self.output_dir_path_le.text()))
