@@ -152,7 +152,6 @@ class ConestogaPlayblastUtils(object):
 
 
 class ConestogaCollapsibleGrpHeader(QtWidgets.QWidget):
-
     clicked = QtCore.Signal()
 
     def __init__(self, text, parent=None):
@@ -209,17 +208,19 @@ class ConestogaCollapsibleGrpHeader(QtWidgets.QWidget):
 
 
 class ConestogaCollapsibleGrpWidget(QtWidgets.QWidget):
-
+    """
+    A collapsible group widget for organizing UI sections.
+    """
     collapsed_state_changed = QtCore.Signal()
 
     def __init__(self, text, parent=None):
-        super(ConestogaCollapsibleGrpWidget, self).__init__(parent)
+        super(ConestogaCollapsibleGrpWidget, self).__init__(parent)  # Fixed super() call
 
         self.append_stretch_on_collapse = False
         self.stretch_appended = False
 
         self.header_wdg = ConestogaCollapsibleGrpHeader(text)
-        self.header_wdg.clicked.connect(self.on_header_clicked)  # pylint: disable=E1101
+        self.header_wdg.clicked.connect(self.on_header_clicked)
 
         self.body_wdg = QtWidgets.QWidget()
         self.body_wdg.setAutoFillBackground(True)
@@ -410,9 +411,11 @@ class ConestogaLineEdit(QtWidgets.QLineEdit):
 
 
 class ConestogaFormLayout(QtWidgets.QGridLayout):
-
+    """
+    A specialized grid layout that implements a form-like layout with labels and fields.
+    """
     def __init__(self, parent=None):
-        super(ConestogaFormLayout, self).__init__(parent)
+        super(ConestogaFormLayout, self).__init__()  # Fixed super() call
 
         self.setContentsMargins(0, 0, 0, 8)
         self.setColumnMinimumWidth(0, 80)
@@ -662,7 +665,6 @@ class ConestogaPlayblast(QtCore.QObject):
         super(ConestogaPlayblast, self).__init__()
 
         self.set_maya_logging_enabled(ConestogaPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
-
         self.build_presets()
 
         self.set_camera(ConestogaPlayblast.DEFAULT_CAMERA)
@@ -1390,7 +1392,7 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         self.create_connections()
 
     def create_widgets(self):
-        # h264
+        # h264 settings widgets
         self.h264_quality_combo = QtWidgets.QComboBox()
         self.h264_quality_combo.addItems(ConestogaPlayblastEncoderSettingsDialog.H264_QUALITIES)
 
@@ -1404,7 +1406,7 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         h264_settings_wdg = QtWidgets.QGroupBox("h264 Options")
         h264_settings_wdg.setLayout(h264_layout)
 
-        # image
+        # image settings widgets
         self.image_quality_sb = QtWidgets.QSpinBox()
         self.image_quality_sb.setMinimumWidth(40)
         self.image_quality_sb.setButtonSymbols(QtWidgets.QSpinBox.NoButtons)
@@ -1417,12 +1419,15 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         image_settings_wdg = QtWidgets.QGroupBox("Image Options")
         image_settings_wdg.setLayout(image_layout)
 
+        # Create stacked widget to hold different settings pages
         self.settings_stacked_wdg = QtWidgets.QStackedWidget()
         self.settings_stacked_wdg.addWidget(h264_settings_wdg)
         self.settings_stacked_wdg.addWidget(image_settings_wdg)
 
+        # Dialog buttons
         self.accept_btn = QtWidgets.QPushButton("Accept")
         self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        
 
     def create_layouts(self):
         button_layout = QtWidgets.QHBoxLayout()
@@ -1438,9 +1443,9 @@ class ConestogaPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
 
     def create_connections(self):
         self.accept_btn.clicked.connect(self.accept)
+        # FIXED: Removed invalid connection to non-existent attributes
+        # self.playblast_wdg.artist_name_changed.connect(self.shot_mask_wdg.update_artist_label)
         self.cancel_btn.clicked.connect(self.close)
-
-
 
     def set_page(self, page):
         if not page in ConestogaPlayblastEncoderSettingsDialog.ENCODER_PAGES:
@@ -1577,6 +1582,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
     ]
 
     collapsed_state_changed = QtCore.Signal()
+    artist_name_changed = QtCore.Signal(str) 
 
 
     def __init__(self, parent=None):
@@ -1596,8 +1602,9 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def create_widgets(self):
         scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
-
+        
         button_height = int(19 * scale_value)
+
         icon_button_width = int(24 * scale_value)
         icon_button_height = int(18 * scale_value)
         combo_box_min_width = int(100 * scale_value)
@@ -1796,12 +1803,18 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         # Add grid to layout
         name_gen_layout.addLayout(name_gen_grid)
         
-        # Generate and Reset buttons side by side
         generate_btn_layout = QtWidgets.QHBoxLayout()
-        generate_btn_layout.addStretch()
+        # Set a large spacing to push buttons closer to edges
+        generate_btn_layout.setContentsMargins(10, 0, 10, 0)
+        generate_btn_layout.setSpacing(15)  # Space between buttons
+
+        # Make buttons larger
+        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+        self.generateFilenameButton.setMinimumWidth(int(160 * scale_value))
+        self.resetNameGeneratorButton.setMinimumWidth(int(160 * scale_value))
+
         generate_btn_layout.addWidget(self.generateFilenameButton)
         generate_btn_layout.addWidget(self.resetNameGeneratorButton)
-        generate_btn_layout.addStretch()
         name_gen_layout.addLayout(generate_btn_layout)
         
         # Create a collapsible widget for the name generator
@@ -2041,7 +2054,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def reset_name_generator(self):
         """
-        Reset all name generator fields to default values.
+        Reset all name generator fields to default values and update related UI elements.
         """
         self.assignmentSpinBox.setValue(1)
         self.lastnameLineEdit.clear()
@@ -2049,6 +2062,9 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.versionTypeCombo.setCurrentIndex(0)  # "wip"
         self.versionNumberSpinBox.setValue(1)
         self.update_filename_preview()
+        
+        # Also reset the output filename field
+        self.output_filename_le.clear()
 
     def generate_filename(self):
         """
@@ -2071,13 +2087,18 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     def update_artist_name(self):
         """
-        This function would update an artist name field if available in the UI.
-        For this integration, we'll check if there is a HUD checkbox or user name field.
+        Updates the artist name based on first and last name fields and emits a signal.
         """
-        # This function would be useful if the UI has a field for artist name display
-        # Since the original Conestoga Playblast UI doesn't have this field,
-        # this is a placeholder for possible future integration
-        pass
+        lastname = self.lastnameLineEdit.text()
+        firstname = self.firstnameLineEdit.text()
+        
+        # Only create combined name if at least one of the fields has content
+        if lastname or firstname:
+            artist_name = f"{firstname} {lastname}".strip()
+            self.artist_name_changed.emit(artist_name)
+        else:
+            # If both are empty, emit empty string
+            self.artist_name_changed.emit("")
 
     def do_playblast(self, batch_cameras=[]):
         output_dir_path = self.output_dir_path_le.text()
@@ -2527,7 +2548,10 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
 
 class ConestogaShotMask(object):
-
+    """
+    Utility class for managing shot mask functionality.
+    All methods are class methods as this class serves as a singleton manager.
+    """
     NODE_NAME = "ConestogaShotMask"
 
     TRANSFORM_NODE_NAME = "cshotmask"
@@ -2553,9 +2577,9 @@ class ConestogaShotMask(object):
     OPT_VAR_BORDER_AR = "cstgShotMaskBorderAR"
     OPT_VAR_COUNTER_PADDING = "cstgShotMaskCounterPadding"
 
-
     @classmethod
     def create_mask(cls):
+        """Creates a new shot mask node if one doesn't already exist."""
         if not ConestogaPlayblastUtils.load_plugin():
             return
 
@@ -2571,6 +2595,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def delete_mask(cls):
+        """Deletes the shot mask if it exists."""
         mask = cls.get_mask()
         if mask:
             transform = cmds.listRelatives(mask, fullPath=True, parent=True)
@@ -2581,6 +2606,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def get_mask(cls):
+        """Returns the shot mask node if it exists, otherwise None."""
         if ConestogaPlayblastUtils.is_plugin_loaded():
             nodes = cmds.ls(type=cls.NODE_NAME)
             if len(nodes) > 0:
@@ -2590,6 +2616,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def refresh_mask(cls):
+        """Updates the shot mask with current settings."""
         mask = cls.get_mask()
         if not mask:
             return
@@ -2627,10 +2654,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_camera_name(cls, name):
+        """Sets the camera name for the shot mask."""
         cmds.optionVar(sv=[cls.OPT_VAR_CAMERA_NAME, name])
 
     @classmethod
     def get_camera_name(cls):
+        """Gets the camera name for the shot mask."""
         if cmds.optionVar(exists=cls.OPT_VAR_CAMERA_NAME):
             return cmds.optionVar(q=cls.OPT_VAR_CAMERA_NAME)
         else:
@@ -2638,6 +2667,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_label_text(cls, text_array):
+        """Sets the label text for all positions in the shot mask."""
         array_len = len(text_array)
         if array_len != cls.LABEL_COUNT:
             om.MGlobal.displayError("Failed to set label text. Invalid number of text values in array: {0} (expected 6)".format(array_len))
@@ -2649,6 +2679,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def get_label_text(cls):
+        """Gets the label text for all positions in the shot mask."""
         if cmds.optionVar(exists=cls.OPT_VAR_LABEL_TEXT):
             return cmds.optionVar(q=cls.OPT_VAR_LABEL_TEXT)
 
@@ -2656,10 +2687,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_label_font(cls, font):
+        """Sets the font for shot mask labels."""
         cmds.optionVar(sv=[cls.OPT_VAR_LABEL_FONT, font])
 
     @classmethod
     def get_label_font(cls):
+        """Gets the font for shot mask labels."""
         if cmds.optionVar(exists=cls.OPT_VAR_LABEL_FONT):
             label_font = cmds.optionVar(q=cls.OPT_VAR_LABEL_FONT)
             if label_font:
@@ -2676,6 +2709,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_label_color(cls, red, green, blue, alpha):
+        """Sets the color for shot mask labels."""
         cmds.optionVar(fv=[cls.OPT_VAR_LABEL_COLOR, red])
         cmds.optionVar(fva=[cls.OPT_VAR_LABEL_COLOR, green])
         cmds.optionVar(fva=[cls.OPT_VAR_LABEL_COLOR, blue])
@@ -2683,6 +2717,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def get_label_color(cls):
+        """Gets the color for shot mask labels."""
         if cmds.optionVar(exists=cls.OPT_VAR_LABEL_COLOR):
             return cmds.optionVar(q=cls.OPT_VAR_LABEL_COLOR)
         else:
@@ -2690,10 +2725,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_label_scale(cls, scale):
+        """Sets the scale factor for shot mask labels."""
         cmds.optionVar(fv=[cls.OPT_VAR_LABEL_SCALE, scale])
 
     @classmethod
     def get_label_scale(cls):
+        """Gets the scale factor for shot mask labels."""
         if cmds.optionVar(exists=cls.OPT_VAR_LABEL_SCALE):
             return cmds.optionVar(q=cls.OPT_VAR_LABEL_SCALE)
         else:
@@ -2701,11 +2738,13 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_border_visible(cls, top, bottom):
+        """Sets the visibility of top and bottom borders."""
         cmds.optionVar(iv=[cls.OPT_VAR_BORDER_VISIBLE, top])
         cmds.optionVar(iva=[cls.OPT_VAR_BORDER_VISIBLE, bottom])
 
     @classmethod
     def get_border_visible(cls):
+        """Gets the visibility of top and bottom borders."""
         if cmds.optionVar(exists=cls.OPT_VAR_BORDER_VISIBLE):
             border_visibility = cmds.optionVar(q=cls.OPT_VAR_BORDER_VISIBLE)
             try:
@@ -2718,6 +2757,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_border_color(cls, red, green, blue, alpha):
+        """Sets the color for shot mask borders."""
         cmds.optionVar(fv=[cls.OPT_VAR_BORDER_COLOR, red])
         cmds.optionVar(fva=[cls.OPT_VAR_BORDER_COLOR, green])
         cmds.optionVar(fva=[cls.OPT_VAR_BORDER_COLOR, blue])
@@ -2725,6 +2765,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def get_border_color(cls):
+        """Gets the color for shot mask borders."""
         if cmds.optionVar(exists=cls.OPT_VAR_BORDER_COLOR):
             return cmds.optionVar(q=cls.OPT_VAR_BORDER_COLOR)
         else:
@@ -2732,10 +2773,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_border_scale(cls, scale):
+        """Sets the scale factor for shot mask borders."""
         cmds.optionVar(fv=[cls.OPT_VAR_BORDER_SCALE, scale])
 
     @classmethod
     def get_border_scale(cls):
+        """Gets the scale factor for shot mask borders."""
         if cmds.optionVar(exists=cls.OPT_VAR_BORDER_SCALE):
             return cmds.optionVar(q=cls.OPT_VAR_BORDER_SCALE)
         else:
@@ -2743,10 +2786,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_border_aspect_ratio_enabled(cls, enabled):
+        """Enables or disables aspect ratio borders."""
         cmds.optionVar(iv=[cls.OPT_VAR_BORDER_AR_ENABLED, enabled])
 
     @classmethod
     def is_border_aspect_ratio_enabled(cls):
+        """Checks if aspect ratio borders are enabled."""
         if cmds.optionVar(exists=cls.OPT_VAR_BORDER_AR_ENABLED):
             return cmds.optionVar(q=cls.OPT_VAR_BORDER_AR_ENABLED)
         else:
@@ -2754,10 +2799,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_border_aspect_ratio(cls, aspect_ratio):
+        """Sets the aspect ratio for borders."""
         cmds.optionVar(fv=[cls.OPT_VAR_BORDER_AR, aspect_ratio])
 
     @classmethod
     def get_border_aspect_ratio(cls):
+        """Gets the aspect ratio for borders."""
         if cmds.optionVar(exists=cls.OPT_VAR_BORDER_AR):
             return cmds.optionVar(q=cls.OPT_VAR_BORDER_AR)
         else:
@@ -2765,10 +2812,12 @@ class ConestogaShotMask(object):
 
     @classmethod
     def set_counter_padding(cls, padding):
+        """Sets the padding for frame counter."""
         cmds.optionVar(iv=[cls.OPT_VAR_COUNTER_PADDING, padding])
 
     @classmethod
     def get_counter_padding(cls):
+        """Gets the padding for frame counter."""
         if cmds.optionVar(exists=cls.OPT_VAR_COUNTER_PADDING):
             pos = cmds.optionVar(q=cls.OPT_VAR_COUNTER_PADDING)
             if pos >= cls.MIN_COUNTER_PADDING and pos <= cls.MAX_COUNTER_PADDING:
@@ -2778,6 +2827,7 @@ class ConestogaShotMask(object):
 
     @classmethod
     def reset_settings(cls):
+        """Resets all shot mask settings to default values."""
         cmds.optionVar(remove=cls.OPT_VAR_BORDER_COLOR)
         cmds.optionVar(remove=cls.OPT_VAR_BORDER_SCALE)
         cmds.optionVar(remove=cls.OPT_VAR_BORDER_VISIBLE)
@@ -2798,7 +2848,7 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
     ALL_CAMERAS = "<All Cameras>"
 
     collapsed_state_changed = QtCore.Signal()
-
+    artist_name_changed = QtCore.Signal(str)
 
     def __init__(self, parent=None):
         super(ConestogaShotMaskWidget, self).__init__(parent)
@@ -2810,9 +2860,28 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.create_layouts()
         self.create_connections()
 
-    def create_widgets(self):
-        scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
+    def update_artist_label(self, artist_name):
+        """
+        Updates the bottom-right label with artist name and refreshes mask.
+        """
+        # Don't modify if update mask is disabled
+        if not self._update_mask_enabled:
+            return
+            
+        # Bottom-right label is at index 5
+        if artist_name:
+            # Only update if there's an artist name to show
+            self.label_line_edits[5].setText(artist_name)
+        else:
+            # Don't clear the label if it has other text
+            # self.label_line_edits[5].setText("")
+            pass
+            
+        # Refresh the mask
+        self.update_mask()
 
+    def create_widgets(self):
+     
         button_width = int(60 * scale_value)
         button_height = int(18 * scale_value)
         spin_box_width = int(50 * scale_value)
@@ -3009,6 +3078,8 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
         self.borders_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
         self.counter_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
 
+      
+
     def refresh_cameras(self):
         cameras = cmds.listCameras()
         cameras.insert(0, ConestogaShotMaskWidget.ALL_CAMERAS)
@@ -3163,7 +3234,9 @@ class ConestogaShotMaskWidget(QtWidgets.QWidget):
             self.update_mask()
 
 class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
-
+    """
+    Widget for managing playblast settings.
+    """
     TEMP_FILE_FORMATS = [
         "movie",
         "png",
@@ -3173,11 +3246,8 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
     shot_mask_reset = QtCore.Signal()
     playblast_reset = QtCore.Signal()
-
     logo_path_updated = QtCore.Signal()
-
     collapsed_state_changed = QtCore.Signal()
-
 
     def __init__(self, parent=None):
         super(ConestogaPlayblastSettingsWidget, self).__init__(parent)
@@ -3185,6 +3255,14 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         self.create_widgets()
         self.create_layouts()
         self.create_connections()
+        
+        self.load_settings()
+
+    def load_settings(self):
+        """
+        Loads saved settings from option variables and updates the UI elements
+        """
+        self.refresh_settings()
 
     def create_widgets(self):
         scale_value = ConestogaPlayblastUtils.dpi_real_scale_value()
@@ -3291,7 +3369,7 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         self.temp_dir_select_btn.clicked.connect(self.open_temp_dir_select_dialog)
 
         self.temp_file_format_cmb.currentTextChanged.connect(self.update_temp_file_format)
-
+   
         self.playblast_reset_btn.clicked.connect(self.on_reset_playblast)
 
         self.logo_path_le.editingFinished.connect(self.update_logo_path)
@@ -3299,8 +3377,8 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
         self.shot_mask_reset_btn.clicked.connect(self.on_reset_shot_mask)
 
-        self.playblast_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
-        self.shot_mask_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)  # pylint: disable=E1101
+        self.playblast_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        self.shot_mask_grp.collapsed_state_changed.connect(self.on_collapsed_state_changed)
 
     def get_ffmpeg_executable_text(self):
         if cmds.about(win=True):
@@ -3309,7 +3387,6 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         return "ffmpeg executable"
 
     def open_ffmpeg_select_dialog(self):
-
         if ConestogaPlayblastUtils.is_ffmpeg_env_var_set():
             QtWidgets.QMessageBox.information(self, "Select ffmpeg Executable", "The ffmpeg path is currently set using the CONESTOGA_PLAYBLAST_FFMPEG environment variable.")
             return
@@ -3343,7 +3420,6 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
         ConestogaPlayblastUtils.set_temp_file_format(text)
 
     def open_logo_select_dialog(self):
-
         if ConestogaPlayblastUtils.is_logo_env_var_set():
             QtWidgets.QMessageBox.information(self, "Select Logo", "The logo path is currently set using the CONESTOGA_PLAYBLAST_LOGO environment variable.")
             return
@@ -3357,25 +3433,24 @@ class ConestogaPlayblastSettingsWidget(QtWidgets.QWidget):
 
     def update_logo_path(self):
         ConestogaPlayblastUtils.set_logo_path(self.logo_path_le.text())
-
-        self.logo_path_updated.emit()  # pylint: disable=E1101
+        self.logo_path_updated.emit()
 
     def on_reset_playblast(self):
         result = QtWidgets.QMessageBox.question(self, "Confirm Reset", "Restore playblast defaults?")
         if result != QtWidgets.QMessageBox.Yes:
             return
 
-        self.playblast_reset.emit()  # pylint: disable=E1101
+        self.playblast_reset.emit()
 
     def on_reset_shot_mask(self):
         result = QtWidgets.QMessageBox.question(self, "Confirm Reset", "Restore shot mask defaults?")
         if result != QtWidgets.QMessageBox.Yes:
             return
 
-        self.shot_mask_reset.emit()  # pylint: disable=E1101
+        self.shot_mask_reset.emit()
 
     def on_collapsed_state_changed(self):
-        self.collapsed_state_changed.emit()  # pylint: disable=E1101
+        self.collapsed_state_changed.emit()
 
     def refresh_settings(self):
         self.ffmpeg_path_le.setText(ConestogaPlayblastUtils.get_ffmpeg_path())
@@ -3451,98 +3526,119 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         button_height = int(40 * scale_value)
         batch_button_width = int(40 * scale_value)
 
-        self.playblast_wdg = ConestogaPlayblastWidget()
-        self.playblast_wdg.setAutoFillBackground(True)
-
-        playblast_scroll_area = QtWidgets.QScrollArea()
-        playblast_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
-        playblast_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        playblast_scroll_area.setWidgetResizable(True)
-        playblast_scroll_area.setWidget(self.playblast_wdg)
-
-        self.shot_mask_wdg = ConestogaShotMaskWidget()
-        self.shot_mask_wdg.setAutoFillBackground(True)
-
-        shot_mask_scroll_area = QtWidgets.QScrollArea()
-        shot_mask_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
-        shot_mask_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        shot_mask_scroll_area.setWidgetResizable(True)
-        shot_mask_scroll_area.setWidget(self.shot_mask_wdg)
-
-        self.settings_wdg = ConestogaPlayblastSettingsWidget()
-        self.settings_wdg.setAutoFillBackground(True)
-
-        settings_scroll_area = QtWidgets.QScrollArea()
-        settings_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
-        settings_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        settings_scroll_area.setWidgetResizable(True)
-        settings_scroll_area.setWidget(self.settings_wdg)
-
+        # Create widgets as instance variables so they're accessible across methods
         self.main_tab_wdg = QtWidgets.QTabWidget()
         self.main_tab_wdg.setAutoFillBackground(True)
         self.main_tab_wdg.setStyleSheet("QTabWidget::pane { border: 0; }")
         self.main_tab_wdg.setMinimumHeight(int(200 * scale_value))
-        self.main_tab_wdg.addTab(playblast_scroll_area, "Playblast")
-        self.main_tab_wdg.addTab(shot_mask_scroll_area, "Shot Mask")
-        self.main_tab_wdg.addTab(settings_scroll_area, "Settings")
-
+        
+        # Create playblast tab components
+        self.playblast_wdg = ConestogaPlayblastWidget()
+        self.playblast_wdg.setAutoFillBackground(True)
+        
+        self.playblast_scroll_area = QtWidgets.QScrollArea()
+        self.playblast_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.playblast_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.playblast_scroll_area.setWidgetResizable(True)
+        self.playblast_scroll_area.setWidget(self.playblast_wdg)
+        
+        # Create shot mask tab components
+        self.shot_mask_wdg = ConestogaShotMaskWidget()
+        self.shot_mask_wdg.setAutoFillBackground(True)
+        
+        self.shot_mask_scroll_area = QtWidgets.QScrollArea()
+        self.shot_mask_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.shot_mask_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.shot_mask_scroll_area.setWidgetResizable(True)
+        self.shot_mask_scroll_area.setWidget(self.shot_mask_wdg)
+        
+        # Create settings tab components
+        self.settings_wdg = ConestogaPlayblastSettingsWidget()
+        self.settings_wdg.setAutoFillBackground(True)
+        
+        self.settings_scroll_area = QtWidgets.QScrollArea()
+        self.settings_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.settings_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.settings_scroll_area.setWidgetResizable(True)
+        self.settings_scroll_area.setWidget(self.settings_wdg)
+        
+        # Set tab widget palette
         palette = self.main_tab_wdg.palette()
         palette.setColor(QtGui.QPalette.Window, QtWidgets.QWidget().palette().color(QtGui.QPalette.Midlight))
         self.main_tab_wdg.setPalette(palette)
-
-
+        
+        # Create button widgets
         self.toggle_mask_btn = QtWidgets.QPushButton("Shot Mask")
         self.toggle_mask_btn.setFixedSize(button_width, button_height)
-
+        
         self.playblast_btn = QtWidgets.QPushButton("Playblast")
         self.playblast_btn.setMinimumSize(button_width, button_height)
-
+        
         self.batch_playblast_btn = QtWidgets.QPushButton("...")
         self.batch_playblast_btn.setFixedSize(batch_button_width, button_height)
-
+        
+        # Set button fonts and colors
         font = self.toggle_mask_btn.font()
         font.setPointSize(10)
         font.setBold(True)
         self.toggle_mask_btn.setFont(font)
         self.playblast_btn.setFont(font)
-
+        
         pal = self.toggle_mask_btn.palette()
         pal.setColor(QtGui.QPalette.Button, QtGui.QColor(QtCore.Qt.darkCyan).darker())
         self.toggle_mask_btn.setPalette(pal)
-
+        
         pal.setColor(QtGui.QPalette.Button, QtGui.QColor(QtCore.Qt.darkGreen).darker())
         self.playblast_btn.setPalette(pal)
         self.batch_playblast_btn.setPalette(pal)
 
     def create_layouts(self):
-
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.setContentsMargins(0, 10, 0, 0)
-        button_layout.addWidget(self.toggle_mask_btn)
-        button_layout.addWidget(self.playblast_btn)
-        button_layout.addWidget(self.batch_playblast_btn)
-
-        status_bar_layout = QtWidgets.QHBoxLayout()
-        status_bar_layout.setContentsMargins(4, 6, 4, 0)
-        status_bar_layout.addStretch()
-        status_bar_layout.addWidget(QtWidgets.QLabel("v{0}".format(ConestogaPlayblastUtils.get_version())))
-
-        main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(6, 6, 6, 0)
-        main_layout.setSpacing(2)
-        main_layout.addWidget(self.main_tab_wdg)
-        main_layout.addLayout(button_layout)
-        main_layout.addLayout(status_bar_layout)
+            # Add tabs to the main tab widget
+            self.main_tab_wdg.addTab(self.playblast_scroll_area, "Playblast")
+            self.main_tab_wdg.addTab(self.shot_mask_scroll_area, "Shot Mask")
+            self.main_tab_wdg.addTab(self.settings_scroll_area, "Settings")
+            
+            # Create button layout
+            button_layout = QtWidgets.QHBoxLayout()
+            button_layout.setContentsMargins(0, 10, 0, 0)
+            button_layout.addWidget(self.toggle_mask_btn)
+            button_layout.addWidget(self.playblast_btn)
+            button_layout.addWidget(self.batch_playblast_btn)
+            
+            # Create status bar layout
+            status_bar_layout = QtWidgets.QHBoxLayout()
+            status_bar_layout.setContentsMargins(4, 6, 4, 0)
+            status_bar_layout.addStretch()
+            status_bar_layout.addWidget(QtWidgets.QLabel("v{0}".format(ConestogaPlayblastUtils.get_version())))
+            
+            # Create main layout
+            main_layout = QtWidgets.QVBoxLayout(self)
+            main_layout.setContentsMargins(6, 6, 6, 0)
+            main_layout.setSpacing(2)
+            main_layout.addWidget(self.main_tab_wdg)
+            main_layout.addLayout(button_layout)
+            main_layout.addLayout(status_bar_layout)
 
     def create_connections(self):
+        # Settings widget connections
         self.settings_wdg.playblast_reset.connect(self.playblast_wdg.reset_settings)
         self.settings_wdg.logo_path_updated.connect(self.shot_mask_wdg.update_mask)
         self.settings_wdg.shot_mask_reset.connect(self.shot_mask_wdg.reset_settings)
-
+        
+        # Playblast connections
         self.playblast_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        
+        # Shot mask connections
         self.shot_mask_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
+        
+        # Artist name connections - check if this attribute exists first to avoid errors
+        if hasattr(self.playblast_wdg, 'artist_name_changed'):
+            self.playblast_wdg.artist_name_changed.connect(self.shot_mask_wdg.update_artist_label)
+        
+        # Settings widget connections
         self.settings_wdg.collapsed_state_changed.connect(self.on_collapsed_state_changed)
-
+        
+        # Button connections
         self.toggle_mask_btn.clicked.connect(self.shot_mask_wdg.toggle_mask)
         self.playblast_btn.clicked.connect(self.playblast_wdg.do_playblast)
         self.batch_playblast_btn.clicked.connect(self.show_batch_playblast_dialog)
@@ -3573,11 +3669,11 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
 
     def on_batch_playblast_accepted(self):
         batch_cameras = self._batch_playblast_dialog.get_selected()
-
         if batch_cameras:
             self.playblast_wdg.do_playblast(batch_cameras)
         else:
             self.playblast_wdg.log_warning("No cameras selected for batch playblast.")
+
 
     def on_collapsed_state_changed(self):
         cmds.optionVar(iv=[ConestogaPlayblastUi.OPT_VAR_GROUP_STATE, self.playblast_wdg.get_collapsed_states()])
@@ -3586,11 +3682,17 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
 
     def restore_collaspsed_states(self):
         if cmds.optionVar(exists=ConestogaPlayblastUi.OPT_VAR_GROUP_STATE):
-            collasped_states = cmds.optionVar(q=ConestogaPlayblastUi.OPT_VAR_GROUP_STATE)
-
-            self.playblast_wdg.set_collapsed_states(collasped_states[0])
-            self.shot_mask_wdg.set_collapsed_states(collasped_states[1])
-            self.settings_wdg.set_collapsed_states(collasped_states[2])
+            collapsed_states = cmds.optionVar(q=ConestogaPlayblastUi.OPT_VAR_GROUP_STATE)
+            
+            # Make sure collapsed_states is a list/tuple and has enough elements
+            if isinstance(collapsed_states, (list, tuple)):
+                # Apply states in a safe way
+                if len(collapsed_states) > 0:
+                    self.playblast_wdg.set_collapsed_states(collapsed_states[0])
+                if len(collapsed_states) > 1:
+                    self.shot_mask_wdg.set_collapsed_states(collapsed_states[1])
+                if len(collapsed_states) > 2:
+                    self.settings_wdg.set_collapsed_states(collapsed_states[2])
 
     def show_workspace_control(self):
         self.workspace_control_instance.set_visible(True)
@@ -3619,35 +3721,41 @@ if __name__ == "__main__":
 
         cstg_test_ui = ConestogaPlayblastUi()
 
-    def get_collapsed_states(self):
-        collapsed = 0
-        collapsed += int(self.labels_grp.is_collapsed())
-        collapsed += int(self.text_grp.is_collapsed()) << 1
-        collapsed += int(self.borders_grp.is_collapsed()) << 2
-        collapsed += int(self.counter_grp.is_collapsed()) << 3
 
-        return collapsed
-
-    def set_collapsed_states(self, collapsed):
-        self.labels_grp.set_collapsed(collapsed & 1)
-        self.text_grp.set_collapsed(collapsed & 2)
-        self.borders_grp.set_collapsed(collapsed & 4)
-        self.counter_grp.set_collapsed(collapsed & 8)
-
-    def show_font_select_dialog(self):
-        current_font = QtGui.QFont(self.font_le.text())
-
-        font = QtWidgets.QFontDialog.getFont(current_font, self)
-
-        # Order of the tuple returned by getFont changed in newer versions of Qt
-        if type(font[0]) == bool:
-            ok = font[0]
-            family = font[1].family()
-        else:
-            family = font[0].family()
-            ok = font[1]
-
-        if(ok):
-            self.font_le.setText(family)
-
-            self.update_mask()
+class ConestogaPlayblastUi:
+    """
+    UI manager class that creates and displays the Conestoga Playblast widget.
+    Provides the interface used by launcher scripts.
+    """
+    
+    _instance = None  # Class variable to track the dialog instance
+    
+    @classmethod
+    def display(cls):
+        """
+        Creates and displays the Conestoga Playblast dialog.
+        This is the main entry point for the tool.
+        """
+        # Delete existing window if it exists
+        win_name = "ConestogaPlayblastWindow"
+        if cmds.window(win_name, exists=True):
+            cmds.deleteUI(win_name)
+            
+        # Create a new Qt dialog to host the widget
+        dialog = QtWidgets.QDialog(parent=QtWidgets.QApplication.activeWindow())
+        dialog.setObjectName(win_name)
+        dialog.setWindowTitle("Conestoga Playblast")
+        
+        # Create the widget and add it to the dialog
+        layout = QtWidgets.QVBoxLayout(dialog)
+        widget = ConestogaPlayblastWidget()
+        layout.addWidget(widget)
+        
+        # Store reference to avoid garbage collection
+        cls._instance = dialog
+        
+        # Set appropriate size and show the dialog
+        dialog.resize(600, 500)
+        dialog.show()
+        
+        return dialog  
