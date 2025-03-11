@@ -150,6 +150,7 @@ class ConestogaPlayblastUtils(object):
         return scale_value
 
 
+
 class ConestogaCollapsibleGrpHeader(QtWidgets.QWidget):
 
     clicked = QtCore.Signal()
@@ -1562,7 +1563,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
 
     OPT_VAR_LOG_TO_SCRIPT_EDITOR = "cstgPlayblastLogToSE"
 
-    # New option vars for name generator
+    # Name generator option vars
     OPT_VAR_ASSIGNMENT_NUMBER = "cstgPlayblastAssignmentNumber"
     OPT_VAR_LAST_NAME = "cstgPlayblastLastName"
     OPT_VAR_FIRST_NAME = "cstgPlayblastFirstName"
@@ -1642,6 +1643,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.filenamePreviewLabel.setStyleSheet("color: yellow; font-weight: bold;")
 
         self.generateFilenameButton = QtWidgets.QPushButton("Generate Filename")
+        self.resetNameGeneratorButton = QtWidgets.QPushButton("Reset")
 
         # End of Name Generator widgets
 
@@ -1794,10 +1796,11 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         # Add grid to layout
         name_gen_layout.addLayout(name_gen_grid)
         
-        # Generate button
+        # Generate and Reset buttons side by side
         generate_btn_layout = QtWidgets.QHBoxLayout()
         generate_btn_layout.addStretch()
         generate_btn_layout.addWidget(self.generateFilenameButton)
+        generate_btn_layout.addWidget(self.resetNameGeneratorButton)
         generate_btn_layout.addStretch()
         name_gen_layout.addLayout(generate_btn_layout)
         
@@ -1805,13 +1808,28 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.name_gen_grp = ConestogaCollapsibleGrpWidget("Name Generator")
         self.name_gen_grp.add_layout(name_gen_layout)
 
-        # Continue with the rest of the layouts as before
+        # Create two-column layout for options
+        options_main_layout = QtWidgets.QVBoxLayout()
+        options_columns_layout = QtWidgets.QHBoxLayout()
+        options_columns_layout.setSpacing(0)  # Remove spacing between columns to make separator look better
+
+        # Left column for camera, resolution, frame range
+        left_column = QtWidgets.QVBoxLayout()
+        left_column.setSpacing(8)
+        left_column.setContentsMargins(4, 4, 8, 4)  # Add right margin for better spacing
+
+        # Camera options
         camera_options_layout = QtWidgets.QHBoxLayout()
         camera_options_layout.setSpacing(6)
         camera_options_layout.addWidget(self.camera_select_cmb)
         camera_options_layout.addWidget(self.camera_select_hide_defaults_cb)
-        camera_options_layout.addStretch()
+        camera_options_layout.addStretch()  # Add stretch to align items to the left
 
+        camera_form = ConestogaFormLayout()
+        camera_form.setVerticalSpacing(5)
+        camera_form.addLayoutRow(0, "Camera:", camera_options_layout)
+
+        # Resolution options
         resolution_layout = QtWidgets.QHBoxLayout()
         resolution_layout.setSpacing(4)
         resolution_layout.addWidget(self.resolution_select_cmb)
@@ -1819,56 +1837,128 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         resolution_layout.addWidget(self.resolution_width_sb)
         resolution_layout.addWidget(QtWidgets.QLabel("x"))
         resolution_layout.addWidget(self.resolution_height_sb)
-        resolution_layout.addStretch()
+        resolution_layout.addStretch()  # Add stretch to align items to the left
 
+        resolution_form = ConestogaFormLayout()
+        resolution_form.setVerticalSpacing(5)
+        resolution_form.addLayoutRow(0, "Resolution:", resolution_layout)
+
+        # Frame range options
         frame_range_layout = QtWidgets.QHBoxLayout()
         frame_range_layout.setSpacing(4)
         frame_range_layout.addWidget(self.frame_range_cmb)
         frame_range_layout.addSpacing(2)
         frame_range_layout.addWidget(self.frame_range_start_sb)
         frame_range_layout.addWidget(self.frame_range_end_sb)
-        frame_range_layout.addStretch()
+        frame_range_layout.addStretch()  # Add stretch to align items to the left
 
+        frame_range_form = ConestogaFormLayout()
+        frame_range_form.setVerticalSpacing(5)
+        frame_range_form.addLayoutRow(0, "Frame Range:", frame_range_layout)
+
+        left_column.addLayout(camera_form)
+        left_column.addLayout(resolution_form)
+        left_column.addLayout(frame_range_form)
+        left_column.addStretch()  # Balance the columns
+
+        # Create vertical separator line
+        vline = QtWidgets.QFrame()
+        vline.setFrameShape(QtWidgets.QFrame.VLine)
+        vline.setFrameShadow(QtWidgets.QFrame.Sunken)
+        vline.setStyleSheet("color: #999999;")  # Light grey color
+
+        # Right column for encoding, visibility
+        right_column = QtWidgets.QVBoxLayout()
+        right_column.setSpacing(8)
+        right_column.setContentsMargins(8, 4, 4, 4)  # Add left margin for better spacing
+
+        # Encoding options
         encoding_layout = QtWidgets.QHBoxLayout()
         encoding_layout.setSpacing(2)
         encoding_layout.addWidget(self.encoding_container_cmb)
         encoding_layout.addWidget(self.encoding_video_codec_cmb)
         encoding_layout.addWidget(self.encoding_video_codec_settings_btn)
-        encoding_layout.addStretch()
+        encoding_layout.addStretch()  # Add stretch to align items to the left
 
+        encoding_form = ConestogaFormLayout()
+        encoding_form.setVerticalSpacing(5)
+        encoding_form.addLayoutRow(0, "Encoding:", encoding_layout)
+
+        # Visibility options
         visibility_layout = QtWidgets.QHBoxLayout()
         visibility_layout.setSpacing(4)
         visibility_layout.addWidget(self.visibility_cmb)
         visibility_layout.addWidget(self.visibility_customize_btn)
-        visibility_layout.addStretch()
+        visibility_layout.addStretch()  # Add stretch to align items to the left
 
-        cb_options_layout_a = QtWidgets.QGridLayout()
-        cb_options_layout_a.setColumnMinimumWidth(0, 100)
-        cb_options_layout_a.addWidget(self.ornaments_cb, 0, 0)
-        cb_options_layout_a.addWidget(self.overscan_cb, 0, 1)
-        cb_options_layout_a.addWidget(self.offscreen_cb, 0, 2)
-        cb_options_layout_a.setColumnStretch(2, 1)
+        visibility_form = ConestogaFormLayout()
+        visibility_form.setVerticalSpacing(5)
+        visibility_form.addLayoutRow(0, "Visibility:", visibility_layout)
 
-        cb_options_layout_b = QtWidgets.QGridLayout()
-        cb_options_layout_b.setColumnMinimumWidth(0, 100)
-        cb_options_layout_b.addWidget(self.shot_mask_cb, 0, 0)
-        cb_options_layout_b.addWidget(self.fit_shot_mask_cb, 0, 1)
-        cb_options_layout_b.addWidget(self.viewer_cb, 0, 2)
-        cb_options_layout_b.setColumnStretch(2, 1)
+        right_column.addLayout(encoding_form)
+        right_column.addLayout(visibility_form)
+        right_column.addStretch()  # Make both columns the same height
 
-        options_layout = ConestogaFormLayout()
-        options_layout.setVerticalSpacing(5)
-        options_layout.addLayoutRow(0, "Camera:", camera_options_layout)
-        options_layout.addLayoutRow(1, "Resolution:", resolution_layout)
-        options_layout.addLayoutRow(2, "Frame Range:", frame_range_layout)
-        options_layout.addLayoutRow(3, "Encoding:", encoding_layout)
-        options_layout.addLayoutRow(4, "Visiblity:", visibility_layout)
-        options_layout.addLayoutRow(5, "", cb_options_layout_a)
-        options_layout.addLayoutRow(6, "", cb_options_layout_b)
+        # Add columns to the options layout with a separator between
+        options_columns_layout.addLayout(left_column)
+        options_columns_layout.addWidget(vline)
+        options_columns_layout.addLayout(right_column)
 
+        # Create horizontal separator line
+        hline = QtWidgets.QFrame()
+        hline.setFrameShape(QtWidgets.QFrame.HLine)
+        hline.setFrameShadow(QtWidgets.QFrame.Sunken)
+        hline.setStyleSheet("color: #999999;")  # Light grey color
+        hline.setFixedHeight(12)  # Give space around the line
+
+        # Add options columns layout to main options layout
+        options_main_layout.addLayout(options_columns_layout)
+        options_main_layout.addSpacing(4)
+        options_main_layout.addWidget(hline)
+        options_main_layout.addSpacing(4)
+
+        # Checkbox options at the bottom spanning full width - improved centered layout
+        checkbox_container = QtWidgets.QHBoxLayout()
+        checkbox_container.setContentsMargins(0, 0, 0, 0)
+
+        # First row of checkboxes in a horizontal layout
+        checkbox_row1 = QtWidgets.QHBoxLayout()
+        checkbox_row1.addStretch()
+        checkbox_row1.addWidget(self.ornaments_cb)
+        checkbox_row1.addSpacing(15)
+        checkbox_row1.addWidget(self.overscan_cb)
+        checkbox_row1.addSpacing(15)
+        checkbox_row1.addWidget(self.offscreen_cb)
+        checkbox_row1.addStretch()
+
+        # Second row of checkboxes in a horizontal layout
+        checkbox_row2 = QtWidgets.QHBoxLayout()
+        checkbox_row2.addStretch()
+        checkbox_row2.addWidget(self.shot_mask_cb)
+        checkbox_row2.addSpacing(15)
+        checkbox_row2.addWidget(self.fit_shot_mask_cb)
+        checkbox_row2.addSpacing(15)
+        checkbox_row2.addWidget(self.viewer_cb)
+        checkbox_row2.addStretch()
+
+        # Add both rows to a vertical layout
+        checkbox_layout = QtWidgets.QVBoxLayout()
+        checkbox_layout.addLayout(checkbox_row1)
+        checkbox_layout.addLayout(checkbox_row2)
+
+        # Add checkbox layout to container with some side margins
+        checkbox_container.addStretch(1)
+        checkbox_container.addLayout(checkbox_layout, 6)  # Center portion takes more space
+        checkbox_container.addStretch(1)
+
+        # Add the checkbox container to the main options layout
+        options_main_layout.addLayout(checkbox_container)
+
+        # Create the options group
         self.options_grp = ConestogaCollapsibleGrpWidget("Options")
-        self.options_grp.add_layout(options_layout)
+        self.options_grp.add_layout(options_main_layout)
 
+        # Logging section remains the same
         logging_button_layout = QtWidgets.QHBoxLayout()
         logging_button_layout.setContentsMargins(4, 0, 4, 10)
         logging_button_layout.addWidget(self.log_to_script_editor_cb)
@@ -1882,11 +1972,12 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.logging_grp.add_widget(self.output_edit)
         self.logging_grp.add_layout(logging_button_layout)
 
+        # Main layout
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
         main_layout.addLayout(output_layout)
-        main_layout.addWidget(self.name_gen_grp)  # Add name generator below output fields
+        main_layout.addWidget(self.name_gen_grp)
         main_layout.addWidget(self.options_grp)
         main_layout.addWidget(self.logging_grp)
 
@@ -1901,6 +1992,7 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.versionTypeCombo.currentTextChanged.connect(self.update_filename_preview)
         self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
         self.generateFilenameButton.clicked.connect(self.generate_filename)
+        self.resetNameGeneratorButton.clicked.connect(self.reset_name_generator)
         
         # Artist name update from first/last name
         self.lastnameLineEdit.textChanged.connect(self.update_artist_name)
@@ -1946,6 +2038,17 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         # Use * for preview but _ for actual filename
         filename = f"A{assignment}*{lastname}*{firstname}*{version_type}*{version_number}.mov"
         self.filenamePreviewLabel.setText(filename)
+
+    def reset_name_generator(self):
+        """
+        Reset all name generator fields to default values.
+        """
+        self.assignmentSpinBox.setValue(1)
+        self.lastnameLineEdit.clear()
+        self.firstnameLineEdit.clear()
+        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
+        self.versionNumberSpinBox.setValue(1)
+        self.update_filename_preview()
 
     def generate_filename(self):
         """
