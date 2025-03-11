@@ -36,8 +36,7 @@ import maya.api.OpenMaya as om
 import maya.OpenMayaUI as omui
 
 # Import the presets and core playblast functionality from the project files.
-from conestoga_playblast_presets import ConestogaPlayblastCustomPresets, ConestogaShotMaskCustomPresets
-from conestoga_playblast import ConestogaPlayblast
+from conestoga_presets import ConestogaPlayblastCustomPresets, ConestogaShotMaskCustomPresets
 
 #-------------------------------------------------------------------------
 # Utility Classes and Functions
@@ -591,6 +590,750 @@ class ConestogaPlayblastVisibilityDialog(QtWidgets.QDialog):
         ["Selection Highlighting", "sel"],
     ]
 
+    VIEWPORT_VISIBILITY_PRESETS = [
+        ["Viewport", []],
+    ]
+
+    DEFAULT_CAMERA = None
+    DEFAULT_RESOLUTION = "Render"
+    DEFAULT_FRAME_RANGE = "Playback"
+
+    DEFAULT_CONTAINER = "mp4"
+    DEFAULT_ENCODER = "h264"
+    DEFAULT_H264_QUALITY = "High"
+    DEFAULT_H264_PRESET = "fast"
+    DEFAULT_IMAGE_QUALITY = 100
+
+    DEFAULT_VISIBILITY = "Viewport"
+
+    DEFAULT_PADDING = 4
+
+    DEFAULT_MAYA_LOGGING_ENABLED = False
+
+    CAMERA_PLAYBLAST_START_ATTR = "playblastStart"
+    CAMERA_PLAYBLAST_END_ATTR = "playblastEnd"
+
+    output_logged = QtCore.Signal(str)
+
+    def __init__(self):
+        super(ConestogaPlayblast, self).__init__()
+
+        self.set_maya_logging_enabled(ConestogaPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
+
+        self.build_presets()
+
+        self.set_camera(ConestogaPlayblast.DEFAULT_CAMERA)
+        self.set_resolution(ConestogaPlayblast.DEFAULT_RESOLUTION)
+        self.set_frame_range(ConestogaPlayblast.DEFAULT_FRAME_RANGE)
+
+        self.set_encoding(ConestogaPlayblast.DEFAULT_CONTAINER, ConestogaPlayblast.DEFAULT_ENCODER)
+        self.set_h264_settings(ConestogaPlayblast.DEFAULT_H264_QUALITY, ConestogaPlayblast.DEFAULT_H264_PRESET)
+        self.set_image_settings(ConestogaPlayblast.DEFAULT_IMAGE_QUALITY)
+
+        self.set_visibility(ConestogaPlayblast.DEFAULT_VISIBILITY)
+
+        self.initialize_ffmpeg_process()
+
+    def build_presets(self):
+        self.resolution_preset_names = []
+        self.resolution_presets = {}
+
+        for preset in ConestogaPlayblast.RESOLUTION_PRESETS:
+            self.resolution_preset_names.append(preset[0])
+            self.resolution_presets[preset[0]] = preset[1]
+
+        try:
+            for preset in ConestogaPlayblastCustomPresets.RESOLUTION_PRESETS:
+                self.resolution_preset_names.append(preset[0])
+                self.resolution_presets[preset[0]] = preset[1]
+        except:
+            traceback.print_exc()
+            self.log_error("Failed to add custom resolution presets. See script editor for details.")
+
+        self.viewport_visibility_preset_names = []
+        self.viewport_visibility_presets = {}
+
+        for preset in ConestogaPlayblast.VIEWPORT_VISIBILITY_PRESETS:
+            self.viewport_visibility_preset_names.append(preset[0])
+            self.viewport_visibility_presets[preset[0]] = preset[1]
+
+        try:
+            for preset in ConestogaPlayblastCustomPresets.VIEWPORT_VISIBILITY_PRESETS:
+                self.viewport_visibility_preset_names.append(preset[0])
+                self.viewport_visibility_presets[preset[0]] = preset[1]
+        except:
+            traceback.print_exc()
+            self.log_error("Failed to add custom viewport visibility presets. See script editor for details.")
+
+    def set_maya_logging_enabled(self, enabled):
+        self._log_to_maya = enabled
+
+    def is_maya_logging_enabled(self):
+        return self._log_to_maya
+
+    def set_camera(self, camera):
+        if camera and camera not in cmds.listCameras():
+            self.log_error("Camera does not exist: {0}".format(camera))
+            camera = None
+
+        self._camera = camera
+
+    def set_resolution(self, resolution):
+        self._resolution_preset = None
+
+        try:
+            widthHeight = self.preset_to_resolution(resolution)
+            self._resolution_preset = resolution
+        except:
+            widthHeight = resolution
+
+        valid_resolution = True
+        try:
+            if not (isinstance(widthHeight[0], int) and isinstance(widthHeight[1], int)):
+                valid_resolution = False
+        except:
+            valid_resolution = False
+
+        if valid_resolution:
+            if widthHeight[0] <=0 or widthHeight[1] <= 0:
+                self.log_error("Invalid resolution: {0}. Values must be greater than zero.".format(widthHeight))
+                return
+        else:
+            self.log_error("Invalid resoluton: {0}. Expected one of [int, int], {1}".format(widthHeight, ", ".join(self.resolution_preset_names)))
+            return
+
+        self._widthHeight = (widthHeight[0], widthHeight[1])
+
+    def get_resolution_width_height(self):
+        if self._resolution_preset:
+            return self.preset_to_resolution(self._resolution_preset)
+
+        return self._widthHeight
+
+    def preset_to_resolution(self, resolution_preset_name):
+        if resolution_preset_name == "Render":
+            width = cmds.getAttr("defaultResolution.width")
+            height = cmds.getAttr("defaultResolution.height")
+            return (width, height)
+        elif resolution_preset_name in self.resolution_preset_names:
+            return self.resolution_presets[resolution_preset_name]
+        else:
+            raise RuntimeError("Invalid resolution preset: {0}".format(resolution_preset_name))
+
+    def set_frame_range(self, frame_range):
+        resolved_frame_range = self.resolve_frame_range(frame_range)
+        if not resolved_frame_range:
+            return
+
+        self._frame_range_preset = None
+        if frame_range in ConestogaPlayblast.FRAME_RANGE_PRESETS:
+            self._frame_range_preset = frame_range
+
+        self._start_frame = resolved_frame_range[0]
+        self._end_frame = resolved_frame_range[1]
+
+    def get_start_end_frame(self):
+        if self._frame_range_preset:
+            return self.preset_to_frame_range(self._frame_range_preset)
+
+        return (self._start_frame, self._end_frame)
+
+    def resolve_frame_range(self, frame_range):
+        try:
+            if type(frame_range) in [list, tuple]:
+                start_frame = frame_range[0]
+                end_frame = frame_range[1]
+            else:
+                start_frame, end_frame = self.preset_to_frame_range(frame_range)
+
+            return (start_frame, end_frame)
+
+        except:
+            presets = []
+            for preset in ConestogaPlayblast.FRAME_RANGE_PRESETS:
+                presets.append("'{0}'".format(preset))
+            self.log_error('Invalid frame range. Expected one of (start_frame, end_frame), {0}'.format(", ".join(presets)))
+
+        return None
+
+    def preset_to_frame_range(self, frame_range_preset):
+        if frame_range_preset == "Render":
+            start_frame = int(cmds.getAttr("defaultRenderGlobals.startFrame"))
+            end_frame = int(cmds.getAttr("defaultRenderGlobals.endFrame"))
+        elif frame_range_preset == "Playback":
+            if mel.eval("timeControl -q -rangeVisible $gPlayBackSlider"):
+                start_frame, end_frame = mel.eval("timeControl -q -rangeArray $gPlayBackSlider")
+                end_frame = end_frame - 1
+            else:
+                start_frame = int(cmds.playbackOptions(q=True, minTime=True))
+                end_frame = int(cmds.playbackOptions(q=True, maxTime=True))
+        elif frame_range_preset == "Animation":
+            start_frame = int(cmds.playbackOptions(q=True, animationStartTime=True))
+            end_frame = int(cmds.playbackOptions(q=True, animationEndTime=True))
+        elif frame_range_preset == "Camera":
+            return self.preset_to_frame_range("Playback")
+        else:
+            raise RuntimeError("Invalid frame range preset: {0}".format(frame_range_preset))
+
+        return (start_frame, end_frame)
+
+    def set_visibility(self, visibility_data):
+        if not visibility_data:
+            visibility_data = []
+
+        if not type(visibility_data) in [list, tuple]:
+            visibility_data = self.preset_to_visibility(visibility_data)
+
+            if visibility_data is None:
+                return
+
+        self._visibility = copy.copy(visibility_data)
+
+    def get_visibility(self):
+        if not self._visibility:
+            return self.get_viewport_visibility()
+
+        return self._visibility
+
+    def preset_to_visibility(self, visibility_preset_name):
+        if not visibility_preset_name in self.viewport_visibility_preset_names:
+            self.log_error("Invalid visibility preset: {0}".format(visibility_preset_name))
+            return None
+
+        visibility_data = []
+
+        preset_names = self.viewport_visibility_presets[visibility_preset_name]
+        if preset_names:
+            for lookup_item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+                visibility_data.append(lookup_item[0] in preset_names)
+
+        return visibility_data
+
+    def get_viewport_visibility(self):
+        model_panel = self.get_viewport_panel()
+        if not model_panel:
+            return None
+
+        viewport_visibility = []
+        try:
+            for item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+                kwargs = {item[1]: True}
+                viewport_visibility.append(cmds.modelEditor(model_panel, q=True, **kwargs))
+        except:
+            traceback.print_exc()
+            self.log_error("Failed to get active viewport visibility. See script editor for details.")
+            return None
+
+        return viewport_visibility
+
+    def set_viewport_visibility(self, model_editor, visibility_flags):
+        cmds.modelEditor(model_editor, e=True, **visibility_flags)
+
+    def create_viewport_visibility_flags(self, visibility_data):
+        visibility_flags = {}
+
+        data_index = 0
+        for item in ConestogaPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+            visibility_flags[item[1]] = visibility_data[data_index]
+            data_index += 1
+
+        return visibility_flags
+
+    def set_encoding(self, container_format, encoder):
+        if container_format not in ConestogaPlayblast.VIDEO_ENCODER_LOOKUP.keys():
+            self.log_error("Invalid container: {0}. Expected one of {1}".format(container_format, ConestogaPlayblast.VIDEO_ENCODER_LOOKUP.keys()))
+            return
+
+        if encoder not in ConestogaPlayblast.VIDEO_ENCODER_LOOKUP[container_format]:
+            self.log_error("Invalid encoder: {0}. Expected one of {1}".format(encoder, ConestogaPlayblast.VIDEO_ENCODER_LOOKUP[container_format]))
+            return
+
+        self._container_format = container_format
+        self._encoder = encoder
+
+    def set_h264_settings(self, quality, preset):
+        if not quality in ConestogaPlayblast.H264_QUALITIES.keys():
+            self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, ConestogaPlayblast.H264_QUALITIES.keys()))
+            return
+
+        if not preset in ConestogaPlayblast.H264_PRESETS:
+            self.log_error("Invalid h264 preset: {0}. Expected one of {1}".format(preset, ConestogaPlayblast.H264_PRESETS))
+            return
+
+        self._h264_quality = quality
+        self._h264_preset = preset
+
+    def get_h264_settings(self):
+        return {
+            "quality": self._h264_quality,
+            "preset": self._h264_preset,
+        }
+
+    def set_image_settings(self, quality):
+        if quality > 0 and quality <= 100:
+            self._image_quality = quality
+        else:
+            self.log_error("Invalid image quality: {0}. Expected value between 1-100")
+
+    def get_image_settings(self):
+        return {
+            "quality": self._image_quality,
+        }
+
+    def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False):
+        ffmpeg_path = ConestogaPlayblastUtils.get_ffmpeg_path()
+        if self.requires_ffmpeg() and not self.validate_ffmpeg(ffmpeg_path):
+            self.log_error("ffmpeg executable is not configured. See script editor for details.")
+            return
+
+        temp_file_format = ConestogaPlayblastUtils.get_temp_file_format()
+        temp_file_is_movie = temp_file_format == "movie"
+
+        if temp_file_is_movie:
+            if sys.platform == "win32":
+                temp_file_extension = "avi"
+            else:
+                temp_file_extension = "mov"
+        else:
+            temp_file_extension = temp_file_format
+
+        viewport_model_panel = self.get_viewport_panel()
+        if not viewport_model_panel:
+            self.log_error("An active viewport is not selected. Select a viewport and retry.")
+            return
+
+        if not output_dir:
+            self.log_error("Output directory path not set")
+            return
+        if not filename:
+            self.log_error("Output file name not set")
+            return
+
+        # Store original camera
+        orig_camera = self.get_active_camera()
+
+        if camera_override:
+            camera = camera_override
+        else:
+            camera = self._camera
+
+        if not camera:
+            camera = orig_camera
+
+        if not camera in cmds.listCameras():
+            self.log_error("Camera does not exist: {0}".format(camera))
+            return
+
+        output_dir = self.resolve_output_directory_path(output_dir)
+        filename = self.resolve_output_filename(filename, camera)
+
+        if padding <= 0:
+            padding = ConestogaPlayblast.DEFAULT_PADDING
+
+        if self.requires_ffmpeg():
+            output_path = os.path.normpath(os.path.join(output_dir, "{0}.{1}".format(filename, self._container_format)))
+            if not overwrite and os.path.exists(output_path):
+                self.log_error("Output file already exists. Enable overwrite to ignore.")
+                return
+
+            playblast_output_dir = "{0}/playblast_temp".format(output_dir)
+            playblast_output = os.path.normpath(os.path.join(playblast_output_dir, filename))
+            force_overwrite = True
+            viewer = False
+            quality = 100
+
+            if temp_file_is_movie:
+                format_ = "movie"
+                compression = None
+                index_from_zero = False
+            else:
+                format_ = "image"
+                compression = temp_file_format
+                index_from_zero = True
+        else:
+            playblast_output = os.path.normpath(os.path.join(output_dir, filename))
+            force_overwrite = overwrite
+            format_ = "image"
+            compression = self._encoder
+            quality = self._image_quality
+            index_from_zero = False
+            viewer = show_in_viewer
+
+        widthHeight = self.get_resolution_width_height()
+        start_frame, end_frame = self.get_start_end_frame()
+
+        if enable_camera_frame_range:
+            if cmds.attributeQuery(ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR, node=camera, exists=True) and cmds.attributeQuery(ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR, node=camera, exists=True):
+                try:
+                    start_frame = int(cmds.getAttr("{0}.{1}".format(camera, ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR)))
+                    end_frame = int(cmds.getAttr("{0}.{1}".format(camera, ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR)))
+
+                    self.log_output("Camera frame range enabled for '{0}' camera: ({1}, {2})\n".format(camera, start_frame, end_frame))
+                except:
+                    self.log_warning("Camera frame range disabled. Invalid attribute type(s) on '{0}' camera (expected integer or float). Defaulting to Playback range.\n".format(camera))
+            else:
+                self.log_warning("Camera frame range disabled. Attributes '{0}' and '{1}' do not exist on '{2}' camera. Defaulting to Playback range.\n".format(ConestogaPlayblast.CAMERA_PLAYBLAST_START_ATTR, ConestogaPlayblast.CAMERA_PLAYBLAST_END_ATTR, camera))
+
+        if start_frame > end_frame:
+            self.log_error("Invalid frame range. The start frame ({0}) is greater than the end frame ({1}).".format(start_frame, end_frame))
+            return
+
+        options = {
+            "filename": playblast_output,
+            "widthHeight": widthHeight,
+            "percent": 100,
+            "startTime": start_frame,
+            "endTime": end_frame,
+            "clearCache": True,
+            "forceOverwrite": force_overwrite,
+            "format": format_,
+            "compression": compression,
+            "quality": quality,
+            "indexFromZero": index_from_zero,
+            "framePadding": padding,
+            "showOrnaments": show_ornaments,
+            "viewer": viewer,
+            "offScreen": offscreen
+        }
+
+        if temp_file_is_movie:
+            if self.use_trax_sounds():
+                options["useTraxSounds"] = True
+            else:
+                sound_node = self.get_sound_node()
+                if sound_node:
+                    options["sound"] = sound_node
+
+        self.log_output("Starting '{0}' playblast...".format(camera))
+        self.log_output("Playblast options: {0}\n".format(options))
+        QtCore.QCoreApplication.processEvents()
+
+        self.set_active_camera(camera)
+
+        orig_visibility_flags = self.create_viewport_visibility_flags(self.get_viewport_visibility())
+        playblast_visibility_flags = self.create_viewport_visibility_flags(self.get_visibility())
+
+        model_editor = cmds.modelPanel(viewport_model_panel, q=True, modelEditor=True)
+        self.set_viewport_visibility(model_editor, playblast_visibility_flags)
+
+        # Store original camera settings
+        if not overscan:
+            overscan_attr = "{0}.overscan".format(camera)
+            orig_overscan = cmds.getAttr(overscan_attr)
+            cmds.setAttr(overscan_attr, 1.0)
+
+        playblast_failed = False
+        try:
+            cmds.playblast(**options)
+        except:
+            traceback.print_exc()
+            self.log_error("Failed to create playblast. See script editor for details.")
+            playblast_failed = True
+        finally:
+            # Restore original camera settings
+            if not overscan:
+                cmds.setAttr(overscan_attr, orig_overscan)
+
+            # Restore original viewport settings
+            self.set_active_camera(orig_camera)
+            self.set_viewport_visibility(model_editor, orig_visibility_flags)
+
+        if playblast_failed:
+            return
+
+        if self.requires_ffmpeg():
+            if temp_file_is_movie:
+                source_path = "{0}/{1}.{2}".format(playblast_output_dir, filename, temp_file_extension)
+            else:
+                source_path = "{0}/{1}.%0{2}d.{3}".format(playblast_output_dir, filename, padding, temp_file_extension)
+
+            if self._encoder == "h264":
+                if temp_file_is_movie:
+                    self.transcode_h264(ffmpeg_path, source_path, output_path)
+                else:
+                    self.encode_h264(ffmpeg_path, source_path, output_path, start_frame)
+            else:
+                self.log_error("Encoding failed. Unsupported encoder ({0}) for container ({1}).".format(self._encoder, self._container_format))
+                self.remove_temp_dir(playblast_output_dir, temp_file_extension)
+                return
+
+            self.remove_temp_dir(playblast_output_dir, temp_file_extension)
+
+            if show_in_viewer:
+                self.open_in_viewer(output_path)
+
+        self.log_output("Playblast complete\n")
+
+
+    def remove_temp_dir(self, temp_dir_path, temp_file_extension):
+        playblast_dir = QtCore.QDir(temp_dir_path)
+        playblast_dir.setNameFilters(["*.{0}".format(temp_file_extension)])
+        playblast_dir.setFilter(QtCore.QDir.Files)
+        for f in playblast_dir.entryList():
+            playblast_dir.remove(f)
+
+        if not playblast_dir.rmdir(temp_dir_path):
+            self.log_warning("Failed to remove temporary directory: {0}".format(temp_dir_path))
+
+    def open_in_viewer(self, path):
+        if not os.path.exists(path):
+            self.log_error("Failed to open in viewer. File does not exists: {0}".format(path))
+            return
+
+        if self._container_format in ("mov", "mp4") and cmds.optionVar(exists="PlayblastCmdQuicktime"):
+            executable_path = cmds.optionVar(q="PlayblastCmdQuicktime")
+            if executable_path:
+                QtCore.QProcess.startDetached(executable_path, [path])
+                return
+
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+
+    def requires_ffmpeg(self):
+        return self._container_format != "Image"
+
+    def validate_ffmpeg(self, ffmpeg_path):
+        if not ffmpeg_path:
+            self.log_error("ffmpeg executable path not set")
+            return False
+        elif not os.path.exists(ffmpeg_path):
+            self.log_error("ffmpeg executable path does not exist: {0}".format(ffmpeg_path))
+            return False
+        elif os.path.isdir(ffmpeg_path):
+            self.log_error("Invalid ffmpeg path: {0}".format(ffmpeg_path))
+            return False
+
+        return True
+
+    def initialize_ffmpeg_process(self):
+        self._ffmpeg_process = QtCore.QProcess()
+        self._ffmpeg_process.readyReadStandardError.connect(self.process_ffmpeg_output)
+
+    def execute_ffmpeg_command(self, program, arguments):
+        self._ffmpeg_process.start(program, arguments)
+        if self._ffmpeg_process.waitForStarted():
+            while self._ffmpeg_process.state() != QtCore.QProcess.NotRunning:
+                QtCore.QCoreApplication.processEvents()
+                QtCore.QThread.usleep(10)
+
+    def process_ffmpeg_output(self):
+        byte_array_output = self._ffmpeg_process.readAllStandardError()
+
+        if sys.version_info.major < 3:
+            output = str(byte_array_output)
+        else:
+            output = str(byte_array_output, "utf-8")
+
+        self.log_output(output)
+
+
+    def encode_h264(self, ffmpeg_path, source_path, output_path, start_frame):
+        self.log_output("Starting h264 encoding...")
+        self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
+
+        framerate = self.get_frame_rate()
+
+        audio_file_path, audio_frame_offset = self.get_audio_attributes()
+        if audio_file_path:
+            audio_offset = self.get_audio_offset_in_sec(start_frame, audio_frame_offset, framerate)
+
+        crf = ConestogaPlayblast.H264_QUALITIES[self._h264_quality]
+        preset = self._h264_preset
+
+        arguments = []
+        arguments.append("-y")
+        arguments.extend(["-framerate", "{0}".format(framerate), "-i", source_path])
+
+        if audio_file_path:
+            arguments.extend(["-ss", "{0}".format(audio_offset), "-i", audio_file_path])
+
+        arguments.extend(["-c:v", "libx264", "-crf:v", "{0}".format(crf), "-preset:v", preset, "-profile:v", "high", "-pix_fmt", "yuv420p"])
+
+        if audio_file_path:
+            arguments.extend(["-filter_complex", "[1:0] apad", "-shortest"])
+
+        arguments.append(output_path)
+
+        self.log_output("ffmpeg arguments: {0}\n".format(arguments))
+
+        self.execute_ffmpeg_command(ffmpeg_path, arguments)
+
+    def transcode_h264(self, ffmpeg_path, source_path, output_path):
+        self.log_output("Starting h264 transcoding...")
+        self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
+
+        crf = ConestogaPlayblast.H264_QUALITIES[self._h264_quality]
+        preset = self._h264_preset
+
+        arguments = []
+        arguments.append("-y")
+        arguments.extend(["-i", source_path])
+        arguments.extend(["-c:v", "libx264", "-crf:v", "{0}".format(crf), "-preset:v", preset, "-profile:v", "high", "-pix_fmt", "yuv420p"])
+        arguments.append(output_path)
+
+        self.log_output("ffmpeg arguments: {0}\n".format(arguments))
+
+        self.execute_ffmpeg_command(ffmpeg_path, arguments)
+
+
+    def get_frame_rate(self):
+        rate_str = cmds.currentUnit(q=True, time=True)
+
+        if rate_str == "game":
+            frame_rate = 15.0
+        elif rate_str == "film":
+            frame_rate = 24.0
+        elif rate_str == "pal":
+            frame_rate = 25.0
+        elif rate_str == "ntsc":
+            frame_rate = 30.0
+        elif rate_str == "show":
+            frame_rate = 48.0
+        elif rate_str == "palf":
+            frame_rate = 50.0
+        elif rate_str == "ntscf":
+            frame_rate = 60.0
+        elif rate_str.endswith("fps"):
+            frame_rate = float(rate_str[0:-3])
+        else:
+            raise RuntimeError("Unsupported frame rate: {0}".format(rate_str))
+
+        return frame_rate
+
+    def get_sound_node(self):
+        return mel.eval("timeControl -q -sound $gPlayBackSlider;")
+
+    def display_sound(self):
+        return mel.eval("timeControl -q -displaySound $gPlayBackSlider;")
+
+    def use_trax_sounds(self):
+        return self.display_sound() and not self.get_sound_node()
+
+    def get_audio_attributes(self):
+        sound_node = self.get_sound_node()
+        if sound_node:
+            file_path = cmds.getAttr("{0}.filename".format(sound_node))
+            file_info = QtCore.QFileInfo(file_path)
+            if file_info.exists():
+                offset = cmds.getAttr("{0}.offset".format(sound_node))
+
+                return (file_path, offset)
+
+        return (None, None)
+
+    def get_audio_offset_in_sec(self, start_frame, audio_frame_offset, frame_rate):
+        return (start_frame - audio_frame_offset) / frame_rate
+
+    def resolve_output_directory_path(self, dir_path):
+        dir_path = ConestogaPlayblastCustomPresets.parse_playblast_output_dir_path(dir_path)
+
+        if "{project}" in dir_path:
+            dir_path = dir_path.replace("{project}", self.get_project_dir_path())
+        if "{temp}" in dir_path:
+            temp_dir_path = ConestogaPlayblastUtils.get_temp_output_dir_path()
+
+            if not temp_dir_path:
+                self.log_warning("The {temp} directory path is not set")
+
+            dir_path = dir_path.replace("{temp}", temp_dir_path)
+
+        return dir_path
+
+    def resolve_output_filename(self, filename, camera):
+        filename = ConestogaPlayblastCustomPresets.parse_playblast_output_filename(filename)
+
+        if "{scene}" in filename:
+            filename = filename.replace("{scene}", self.get_scene_name())
+        if "{timestamp}" in filename:
+            filename = filename.replace("{timestamp}", self.get_timestamp())
+
+        if "{camera}" in filename:
+            new_camera_name = camera
+
+            new_camera_name = new_camera_name.split(':')[-1]
+            new_camera_name = new_camera_name.split('|')[-1]
+
+            filename = filename.replace("{camera}", new_camera_name)
+
+        return filename
+
+    def get_project_dir_path(self):
+        return cmds.workspace(q=True, rootDirectory=True)
+
+    def get_scene_name(self):
+        scene_name = cmds.file(q=True, sceneName=True, shortName=True)
+        if scene_name:
+            scene_name = os.path.splitext(scene_name)[0]
+        else:
+            scene_name = "untitled"
+
+        return scene_name
+
+    def get_timestamp(self):
+        return "{0}".format(int(time.time()))
+
+    def get_viewport_panel(self):
+        model_panel = cmds.getPanel(withFocus=True)
+        try:
+            cmds.modelPanel(model_panel, q=True, modelEditor=True)
+        except:
+            return None
+
+        return model_panel
+
+    def get_active_camera(self):
+        model_panel = self.get_viewport_panel()
+        if not model_panel:
+            self.log_error("Failed to get active camera. A viewport is not active.")
+            return None
+
+        return cmds.modelPanel(model_panel, q=True, camera=True)
+
+    def set_active_camera(self, camera):
+        model_panel = self.get_viewport_panel()
+        if model_panel:
+            mel.eval("lookThroughModelPanel {0} {1}".format(camera, model_panel))
+        else:
+            self.log_error("Failed to set active camera. A viewport is not active.")
+
+    def log_error(self, text):
+        if self._log_to_maya:
+            om.MGlobal.displayError("[ConestogaPlayblast] {0}".format(text))
+
+        self.output_logged.emit("[ERROR] {0}".format(text))  # pylint: disable=E1101
+
+    def log_warning(self, text):
+        if self._log_to_maya:
+            om.MGlobal.displayWarning("[ConestogaPlayblast] {0}".format(text))
+
+        self.output_logged.emit("[WARNING] {0}".format(text))  # pylint: disable=E1101
+
+    def log_output(self, text):
+        if self._log_to_maya:
+            om.MGlobal.displayInfo(text)
+
+        self.output_logged.emit(text)  # pylint: disable=E1101Fluids", "fluids"],
+        ["Hair Systems", "hairSystems"],
+        ["Follicles", "follicles"],
+        ["nCloths", "nCloths"],
+        ["nParticles", "nParticles"],
+        ["nRigids", "nRigids"],
+        ["Dynamic Constraints", "dynamicConstraints"],
+        ["Locators", "locators"],
+        ["Dimensions", "dimensions"],
+        ["Pivots", "pivots"],
+        ["Handles", "handles"],
+        ["Texture Placements", "textures"],
+        ["Strokes", "strokes"],
+        ["Motion Trails", "motionTrails"],
+        ["Plugin Shapes", "pluginShapes"],
+        ["Clip Ghosts", "clipGhosts"],
+        ["Grease Pencil", "greasePencils"],
+        ["Grid", "grid"],
+        ["HUD", "hud"],
+        ["Hold-Outs", "hos"],
+        ["Selection Highlighting", "sel"],
+    ]
+
     def __init__(self, parent):
         super(ConestogaPlayblastVisibilityDialog, self).__init__(parent)
         self.setWindowTitle("Customize Visibility")
@@ -908,535 +1651,11 @@ class ConestogaShotMask(object):
         cmds.optionVar(remove=cls.OPT_VAR_LABEL_TEXT)
 
 #-------------------------------------------------------------------------
-# Tab 1: Playblast Options
+# Tab Classes (for the UI tabs)
 #-------------------------------------------------------------------------
-class PlayblastTabWidget(QtWidgets.QWidget):
-    artist_name_changed = QtCore.Signal(str)
-    
-    def __init__(self, parent=None):
-        super(PlayblastTabWidget, self).__init__(parent)
-        self.utils = ConestogaPlayblastUtils()
-        self.scale = self.utils.dpi_real_scale_value()
-        # Instantiate the core playblast functionality from the plug‐in file.
-        self._playblast = ConestogaPlayblast()
-        self._encoder_settings_dialog = None
-        self._visibility_dialog = None
-        self.init_ui()
-
-    def init_ui(self):
-        # Output settings
-        self.outputDirLE = ConestogaLineEdit(ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
-        self.outputDirLE.setPlaceholderText("{project}/movies")
-        self.selectOutputDirBtn = QtWidgets.QPushButton("...")
-        self.selectOutputDirBtn.setToolTip("Select Output Directory")
-        self.showFolderBtn = QtWidgets.QPushButton(QtGui.QIcon(":fileOpen.png"), "")
-        self.showFolderBtn.setToolTip("Show in Folder")
-        self.outputFilenameLE = ConestogaLineEdit(ConestogaLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
-        self.outputFilenameLE.setPlaceholderText("{scene}_{timestamp}")
-        self.forceOverwriteCB = QtWidgets.QCheckBox("Force overwrite")
-        
-        # Name Generator
-        self.assignmentSpin = QtWidgets.QSpinBox()
-        self.assignmentSpin.setRange(1,99)
-        self.assignmentSpin.setFixedWidth(50)
-        self.lastNameLE = QtWidgets.QLineEdit()
-        self.lastNameLE.setPlaceholderText("Last Name")
-        self.firstNameLE = QtWidgets.QLineEdit()
-        self.firstNameLE.setPlaceholderText("First Name")
-        self.versionTypeCombo = QtWidgets.QComboBox()
-        self.versionTypeCombo.addItems(["wip", "final"])
-        self.versionNumberSpin = QtWidgets.QSpinBox()
-        self.versionNumberSpin.setRange(1,99)
-        self.versionNumberSpin.setFixedWidth(50)
-        self.filenamePreviewLabel = QtWidgets.QLabel("A1_LastName_FirstName_wip_01.mov")
-        self.filenamePreviewLabel.setStyleSheet("color: yellow; font-weight: bold;")
-        self.generateFilenameBtn = QtWidgets.QPushButton("Generate Filename")
-        self.resetNameGenBtn = QtWidgets.QPushButton("Reset")
-        
-        # Camera Selection
-        self.cameraSelectCombo = QtWidgets.QComboBox()
-        self.hideDefaultCamsCB = QtWidgets.QCheckBox("Hide defaults")
-        self.refresh_camera_combo()
-        
-        # Resolution Options
-        self.resolutionPresetCombo = QtWidgets.QComboBox()
-        self.resolutionPresetCombo.addItems(["Render", "HD 1080", "HD 720", "Custom"])
-        self.resolutionWidthSB = QtWidgets.QSpinBox()
-        self.resolutionWidthSB.setRange(1,9999)
-        self.resolutionHeightSB = QtWidgets.QSpinBox()
-        self.resolutionHeightSB.setRange(1,9999)
-        self.resolutionWidthSB.setValue(1920)
-        self.resolutionHeightSB.setValue(1080)
-        
-        # Frame Range Options
-        self.frameRangePresetCombo = QtWidgets.QComboBox()
-        self.frameRangePresetCombo.addItems(["Animation", "Playback", "Render", "Camera", "Custom"])
-        self.frameRangeStartSB = QtWidgets.QSpinBox()
-        self.frameRangeEndSB = QtWidgets.QSpinBox()
-        self.frameRangeStartSB.setRange(-9999,9999)
-        self.frameRangeEndSB.setRange(-9999,9999)
-        self.frameRangeStartSB.setValue(1)
-        self.frameRangeEndSB.setValue(100)
-        
-        # Encoding Options
-        self.encodingContainerCombo = QtWidgets.QComboBox()
-        self.encodingContainerCombo.addItems(["mov", "mp4", "Image"])
-        self.encodingVideoCodecCombo = QtWidgets.QComboBox()
-        self.encodingVideoCodecCombo.addItems(["h264"])
-        self.encoderSettingsBtn = QtWidgets.QPushButton("Settings...")
-        
-        # Visibility Options
-        self.visibilityCombo = QtWidgets.QComboBox()
-        self.visibilityCombo.addItems(["Viewport", "Custom"])
-        self.visibilityCustomizeBtn = QtWidgets.QPushButton("Customize...")
-        
-        # Other Options
-        self.overscanCB = QtWidgets.QCheckBox("Overscan")
-        self.ornamentsCB = QtWidgets.QCheckBox("Ornaments")
-        self.offscreenCB = QtWidgets.QCheckBox("Offscreen")
-        self.viewerCB = QtWidgets.QCheckBox("Show in Viewer")
-        self.shotMaskCB = QtWidgets.QCheckBox("Shot Mask")
-        self.fitShotMaskCB = QtWidgets.QCheckBox("Fit Shot Mask")
-        self.viewerCB.setChecked(True)
-        self.shotMaskCB.setChecked(True)
-        
-        # Playblast Button
-        self.playblastBtn = QtWidgets.QPushButton("Playblast")
-        button_size = int(40 * self.scale)
-        self.playblastBtn.setMinimumHeight(button_size)
-        font = self.playblastBtn.font()
-        font.setPointSize(10)
-        font.setBold(True)
-        self.playblastBtn.setFont(font)
-        
-        # Logging 
-        self.logToScriptEditorCB = QtWidgets.QCheckBox("Log to Script Editor")
-        self.logOutputTE = QtWidgets.QPlainTextEdit()
-        self.logOutputTE.setReadOnly(True)
-        self.clearLogBtn = QtWidgets.QPushButton("Clear Log")
-        
-        # Layouts
-        mainLayout = QtWidgets.QVBoxLayout(self)
-        
-        # Output layout
-        outLayout = QtWidgets.QFormLayout()
-        hDirLayout = QtWidgets.QHBoxLayout()
-        hDirLayout.addWidget(self.outputDirLE)
-        hDirLayout.addWidget(self.selectOutputDirBtn)
-        hDirLayout.addWidget(self.showFolderBtn)
-        outLayout.addRow("Output Dir:", hDirLayout)
-        
-        hFileLayout = QtWidgets.QHBoxLayout()
-        hFileLayout.addWidget(self.outputFilenameLE)
-        hFileLayout.addWidget(self.forceOverwriteCB)
-        outLayout.addRow("Filename:", hFileLayout)
-        mainLayout.addLayout(outLayout)
-        
-        # Name Generator group
-        nameGenGrp = ConestogaCollapsibleGrpWidget("Name Generator")
-        nameGenLayout = QtWidgets.QGridLayout()
-        nameGenLayout.addWidget(QtWidgets.QLabel("Assignment:"), 0, 0)
-        nameGenLayout.addWidget(self.assignmentSpin, 0, 1)
-        nameGenLayout.addWidget(QtWidgets.QLabel("Last Name:"), 1, 0)
-        nameGenLayout.addWidget(self.lastNameLE, 1, 1, 1, 2)
-        nameGenLayout.addWidget(QtWidgets.QLabel("First Name:"), 2, 0)
-        nameGenLayout.addWidget(self.firstNameLE, 2, 1, 1, 2)
-        nameGenLayout.addWidget(QtWidgets.QLabel("Type:"), 3, 0)
-        nameGenLayout.addWidget(self.versionTypeCombo, 3, 1)
-        nameGenLayout.addWidget(QtWidgets.QLabel("Version:"), 4, 0)
-        nameGenLayout.addWidget(self.versionNumberSpin, 4, 1)
-        nameGenLayout.addWidget(QtWidgets.QLabel("Preview:"), 5, 0)
-        nameGenLayout.addWidget(self.filenamePreviewLabel, 5, 1, 1, 2)
-        btnRow = QtWidgets.QHBoxLayout()
-        btnRow.addWidget(self.generateFilenameBtn)
-        btnRow.addWidget(self.resetNameGenBtn)
-        nameGenLayout.addLayout(btnRow, 6, 0, 1, 3)
-        nameGenGrp.add_layout(nameGenLayout)
-        mainLayout.addWidget(nameGenGrp)
-        
-        # Options group
-        optionsGrp = ConestogaCollapsibleGrpWidget("Options")
-        optionsLayout = QtWidgets.QVBoxLayout()
-        
-        # Two-column layout for options
-        optionsColumns = QtWidgets.QHBoxLayout()
-        
-        # Left Column (Camera, Resolution, Frame Range)
-        leftCol = QtWidgets.QVBoxLayout()
-        
-        # Camera Selection
-        camLayout = QtWidgets.QHBoxLayout()
-        camLayout.addWidget(QtWidgets.QLabel("Camera:"))
-        camLayout.addWidget(self.cameraSelectCombo)
-        camLayout.addWidget(self.hideDefaultCamsCB)
-        camLayout.addStretch()
-        leftCol.addLayout(camLayout)
-        
-        # Resolution
-        resLayout = QtWidgets.QHBoxLayout()
-        resLayout.addWidget(QtWidgets.QLabel("Resolution:"))
-        resLayout.addWidget(self.resolutionPresetCombo)
-        resLayout.addWidget(self.resolutionWidthSB)
-        resLayout.addWidget(QtWidgets.QLabel("x"))
-        resLayout.addWidget(self.resolutionHeightSB)
-        resLayout.addStretch()
-        leftCol.addLayout(resLayout)
-        
-        # Frame Range
-        frLayout = QtWidgets.QHBoxLayout()
-        frLayout.addWidget(QtWidgets.QLabel("Frame Range:"))
-        frLayout.addWidget(self.frameRangePresetCombo)
-        frLayout.addWidget(self.frameRangeStartSB)
-        frLayout.addWidget(self.frameRangeEndSB)
-        frLayout.addStretch()
-        leftCol.addLayout(frLayout)
-        
-        # Right Column (Encoding, Visibility)
-        rightCol = QtWidgets.QVBoxLayout()
-        
-        # Encoding
-        encLayout = QtWidgets.QHBoxLayout()
-        encLayout.addWidget(QtWidgets.QLabel("Encoding:"))
-        encLayout.addWidget(self.encodingContainerCombo)
-        encLayout.addWidget(self.encodingVideoCodecCombo)
-        encLayout.addWidget(self.encoderSettingsBtn)
-        encLayout.addStretch()
-        rightCol.addLayout(encLayout)
-        
-        # Visibility
-        visLayout = QtWidgets.QHBoxLayout()
-        visLayout.addWidget(QtWidgets.QLabel("Visibility:"))
-        visLayout.addWidget(self.visibilityCombo)
-        visLayout.addWidget(self.visibilityCustomizeBtn)
-        visLayout.addStretch()
-        rightCol.addLayout(visLayout)
-        
-        # Add columns to layout
-        optionsColumns.addLayout(leftCol)
-        optionsColumns.addLayout(rightCol)
-        optionsLayout.addLayout(optionsColumns)
-        
-        # Add separator
-        separator = QtWidgets.QFrame()
-        separator.setFrameShape(QtWidgets.QFrame.HLine)
-        separator.setFrameShadow(QtWidgets.QFrame.Sunken)
-        optionsLayout.addWidget(separator)
-        
-        # Checkboxes in rows at the bottom
-        checkboxLayout = QtWidgets.QVBoxLayout()
-        
-        # First row of checkboxes
-        cb1Layout = QtWidgets.QHBoxLayout()
-        cb1Layout.addStretch()
-        cb1Layout.addWidget(self.ornamentsCB)
-        cb1Layout.addSpacing(15)
-        cb1Layout.addWidget(self.overscanCB)
-        cb1Layout.addSpacing(15)
-        cb1Layout.addWidget(self.offscreenCB)
-        cb1Layout.addStretch()
-        checkboxLayout.addLayout(cb1Layout)
-        
-        # Second row of checkboxes
-        cb2Layout = QtWidgets.QHBoxLayout()
-        cb2Layout.addStretch()
-        cb2Layout.addWidget(self.shotMaskCB)
-        cb2Layout.addSpacing(15)
-        cb2Layout.addWidget(self.fitShotMaskCB)
-        cb2Layout.addSpacing(15)
-        cb2Layout.addWidget(self.viewerCB)
-        cb2Layout.addStretch()
-        checkboxLayout.addLayout(cb2Layout)
-        
-        optionsLayout.addLayout(checkboxLayout)
-        optionsGrp.add_layout(optionsLayout)
-        mainLayout.addWidget(optionsGrp)
-        
-        # Add the playblast button
-        mainLayout.addWidget(self.playblastBtn, alignment=QtCore.Qt.AlignCenter)
-        
-        # Logging section
-        loggingGrp = ConestogaCollapsibleGrpWidget("Logging")
-        loggingLayout = QtWidgets.QVBoxLayout()
-        
-        loggingLayout.addWidget(self.logOutputTE)
-        
-        logOptionsLayout = QtWidgets.QHBoxLayout()
-        logOptionsLayout.addWidget(self.logToScriptEditorCB)
-        logOptionsLayout.addStretch()
-        logOptionsLayout.addWidget(self.clearLogBtn)
-        loggingLayout.addLayout(logOptionsLayout)
-        
-        loggingGrp.add_layout(loggingLayout)
-        mainLayout.addWidget(loggingGrp)
-
-        # Connect signals for dynamic updates
-        self.selectOutputDirBtn.clicked.connect(self.select_output_directory)
-        self.showFolderBtn.clicked.connect(self.open_output_directory)
-        
-        self.generateFilenameBtn.clicked.connect(self.generate_filename)
-        self.resetNameGenBtn.clicked.connect(self.reset_name_generator)
-        self.assignmentSpin.valueChanged.connect(self.update_filename_preview)
-        self.lastNameLE.textChanged.connect(self.update_filename_preview)
-        self.firstNameLE.textChanged.connect(self.update_filename_preview)
-        self.versionTypeCombo.currentTextChanged.connect(self.update_filename_preview)
-        self.versionNumberSpin.valueChanged.connect(self.update_filename_preview)
-        
-        self.cameraSelectCombo.currentTextChanged.connect(self.on_camera_changed)
-        self.hideDefaultCamsCB.toggled.connect(self.refresh_camera_combo)
-        
-        self.frameRangePresetCombo.currentTextChanged.connect(self.refresh_frame_range)
-        self.frameRangeStartSB.editingFinished.connect(self.on_frame_range_changed)
-        self.frameRangeEndSB.editingFinished.connect(self.on_frame_range_changed)
-        
-        self.resolutionPresetCombo.currentTextChanged.connect(self.refresh_resolution)
-        self.resolutionWidthSB.editingFinished.connect(self.on_resolution_changed)
-        self.resolutionHeightSB.editingFinished.connect(self.on_resolution_changed)
-        
-        self.encodingContainerCombo.currentTextChanged.connect(self.refresh_video_encoders)
-        self.encodingVideoCodecCombo.currentTextChanged.connect(self.on_video_encoder_changed)
-        self.encoderSettingsBtn.clicked.connect(self.show_encoder_settings_dialog)
-        
-        self.visibilityCombo.currentTextChanged.connect(self.on_visibility_preset_changed)
-        self.visibilityCustomizeBtn.clicked.connect(self.show_visibility_dialog)
-        
-        self.playblastBtn.clicked.connect(self.do_playblast)
-        
-        self.logToScriptEditorCB.toggled.connect(self.on_log_to_script_editor_changed)
-        self.clearLogBtn.clicked.connect(lambda: self.logOutputTE.clear())
-        
-        self.lastNameLE.textChanged.connect(self.update_artist_name)
-        self.firstNameLE.textChanged.connect(self.update_artist_name)
-        
-        self._playblast.output_logged.connect(self.append_output)
-
-    def select_output_directory(self):
-        current_dir_path = self.outputDirLE.text()
-        if not current_dir_path:
-            current_dir_path = self.outputDirLE.placeholderText()
-
-        dir_path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Output Directory", current_dir_path)
-        
-        if dir_path:
-            self.outputDirLE.setText(dir_path)
-
-    def open_output_directory(self):
-        output_dir_path = self.outputDirLE.text()
-        if not output_dir_path:
-            output_dir_path = self.outputDirLE.placeholderText()
-
-        if os.path.isdir(output_dir_path):
-            if sys.platform == "win32":
-                file_prefix = "file:///"
-            else:
-                file_prefix = "file://"
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl(f"{file_prefix}{output_dir_path}"))
-        else:
-            self.append_output(f"[ERROR] Invalid directory path: {output_dir_path}")
-
-    def refresh_camera_combo(self):
-        current_camera = self.cameraSelectCombo.currentText()
-        self.cameraSelectCombo.clear()
-        self.cameraSelectCombo.addItem("<Active>")
-        cams = ConestogaPlayblastUtils.cameras_in_scene(
-            not self.hideDefaultCamsCB.isChecked(), True)
-        self.cameraSelectCombo.addItems(cams)
-        
-        if current_camera and self.cameraSelectCombo.findText(current_camera) >= 0:
-            self.cameraSelectCombo.setCurrentText(current_camera)
-
-    def refresh_resolution(self):
-        preset = self.resolutionPresetCombo.currentText()
-        if preset != "Custom":
-            if preset == "Render":
-                w = cmds.getAttr("defaultResolution.width")
-                h = cmds.getAttr("defaultResolution.height")
-            elif preset == "HD 1080":
-                w, h = 1920, 1080
-            elif preset == "HD 720":
-                w, h = 1280, 720
-            else:
-                return
-                
-            self.resolutionWidthSB.setValue(w)
-            self.resolutionHeightSB.setValue(h)
-
-    def refresh_frame_range(self):
-        preset = self.frameRangePresetCombo.currentText()
-        if preset != "Custom":
-            if preset == "Playback":
-                start = int(cmds.playbackOptions(q=True, minTime=True))
-                end = int(cmds.playbackOptions(q=True, maxTime=True))
-            elif preset == "Animation":
-                start = int(cmds.playbackOptions(q=True, animationStartTime=True))
-                end = int(cmds.playbackOptions(q=True, animationEndTime=True))
-            elif preset == "Render":
-                start = int(cmds.getAttr("defaultRenderGlobals.startFrame"))
-                end = int(cmds.getAttr("defaultRenderGlobals.endFrame"))
-            else:
-                return
-                
-            self.frameRangeStartSB.setValue(start)
-            self.frameRangeEndSB.setValue(end)
-            
-        # Enable/disable spinboxes based on selected preset
-        use_camera_range = preset == "Camera"
-        self.frameRangeStartSB.setEnabled(not use_camera_range)
-        self.frameRangeEndSB.setEnabled(not use_camera_range)
-
-    def refresh_video_encoders(self):
-        container = self.encodingContainerCombo.currentText()
-        self.encodingVideoCodecCombo.clear()
-        
-        if container == "mov" or container == "mp4":
-            self.encodingVideoCodecCombo.addItem("h264")
-        elif container == "Image":
-            self.encodingVideoCodecCombo.addItems(["jpg", "png", "tif"])
-
-    def on_video_encoder_changed(self):
-        container = self.encodingContainerCombo.currentText()
-        encoder = self.encodingVideoCodecCombo.currentText()
-        
-        # Additional logic here if needed
-
-    def on_resolution_changed(self):
-        w = self.resolutionWidthSB.value()
-        h = self.resolutionHeightSB.value()
-        
-        # Check if it matches any preset
-        if (w == 1920 and h == 1080):
-            self.resolutionPresetCombo.setCurrentText("HD 1080")
-        elif (w == 1280 and h == 720):
-            self.resolutionPresetCombo.setCurrentText("HD 720")
-        else:
-            self.resolutionPresetCombo.setCurrentText("Custom")
-
-    def on_frame_range_changed(self):
-        self.frameRangePresetCombo.setCurrentText("Custom")
-
-    def show_encoder_settings_dialog(self):
-        if not self._encoder_settings_dialog:
-            self._encoder_settings_dialog = ConestogaPlayblastEncoderSettingsDialog(self)
-        
-        container = self.encodingContainerCombo.currentText()
-        if container == "Image":
-            self._encoder_settings_dialog.set_page("Image")
-            self._encoder_settings_dialog.set_image_settings(100)  # Default value
-        else:
-            self._encoder_settings_dialog.set_page("h264")
-            self._encoder_settings_dialog.set_h264_settings("High", "fast")  # Default values
-        
-        self._encoder_settings_dialog.exec_()
-
-    def on_visibility_preset_changed(self):
-        # Logic for handling visibility preset changes
-        pass
-
-    def show_visibility_dialog(self):
-        if not self._visibility_dialog:
-            self._visibility_dialog = ConestogaPlayblastVisibilityDialog(self)
-        
-        # Here you would set the initial visibility data
-        # self._visibility_dialog.set_visibility_data(data)
-        
-        self._visibility_dialog.exec_()
-
-    def update_filename_preview(self):
-        assign = self.assignmentSpin.value()
-        lname = self.lastNameLE.text() or "LastName"
-        fname = self.firstNameLE.text() or "FirstName"
-        vtype = self.versionTypeCombo.currentText()
-        vnum = str(self.versionNumberSpin.value()).zfill(2)
-        
-        # Use * for preview but _ for actual filename
-        filename = f"A{assign}_*{lname}*_{fname}*_{vtype}*_{vnum}.mov"
-        self.filenamePreviewLabel.setText(filename)
-
-    def reset_name_generator(self):
-        """Reset all fields in the name generator to default values."""
-        self.assignmentSpin.setValue(1)
-        self.lastNameLE.clear()
-        self.firstNameLE.clear()
-        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
-        self.versionNumberSpin.setValue(1)
-        self.update_filename_preview()
-
-    def generate_filename(self):
-        """Generate a filename from the inputs and place it in the output field."""
-        assign = self.assignmentSpin.value()
-        lname = self.lastNameLE.text()
-        fname = self.firstNameLE.text()
-        
-        if not lname or not fname:
-            QtWidgets.QMessageBox.warning(self, "Missing Information", 
-                                         "Please enter both last name and first name.")
-            return
-        
-        vtype = self.versionTypeCombo.currentText()
-        vnum = str(self.versionNumberSpin.value()).zfill(2)
-        
-        # Use underscores for the actual file
-        filename = f"A{assign}_{lname}_{fname}_{vtype}_{vnum}"
-        
-        # Add extension based on the selected container format
-        container = self.encodingContainerCombo.currentText()
-        if container == "Image":
-            codec = self.encodingVideoCodecCombo.currentText()
-            filename += f".{codec}"
-        else:
-            filename += f".{container}"
-            
-        self.outputFilenameLE.setText(filename)
-
-    def update_artist_name(self):
-        lname = self.lastNameLE.text()
-        fname = self.firstNameLE.text()
-        artist = f"{fname} {lname}".strip() if (lname or fname) else ""
-        self.artist_name_changed.emit(artist)
-
-    def on_camera_changed(self, text):
-        # Additional logic (if needed) when the camera selection changes
-        pass
-
-    def on_log_to_script_editor_changed(self, state):
-        if hasattr(self._playblast, 'set_maya_logging_enabled'):
-            self._playblast.set_maya_logging_enabled(state)
-
-    def append_output(self, text):
-        self.logOutputTE.appendPlainText(text)
-        cursor = self.logOutputTE.textCursor()
-        cursor.movePosition(QtGui.QTextCursor.End)
-        self.logOutputTE.setTextCursor(cursor)
-
-    def do_playblast(self):
-        outDir = self.outputDirLE.text() or self.outputDirLE.placeholderText()
-        fname = self.outputFilenameLE.text() or self.outputFilenameLE.placeholderText()
-        pad = 4  # Default padding
-        overscan = self.overscanCB.isChecked()
-        ornaments = self.ornamentsCB.isChecked()
-        viewer = self.viewerCB.isChecked()
-        offscreen = self.offscreenCB.isChecked()
-        overwrite = self.forceOverwriteCB.isChecked()
-        cam_range = (self.frameRangePresetCombo.currentText() == "Camera")
-        
-        # Handle shot mask settings
-        shot_mask = self.shotMaskCB.isChecked()
-        fit_shot_mask = self.fitShotMaskCB.isChecked()
-        
-        # Camera selection
-        camera = ""
-        if self.cameraSelectCombo.currentText() != "<Active>":
-            camera = self.cameraSelectCombo.currentText()
-        
-        # Call the core playblast execution from the plug‐in
-        if hasattr(self._playblast, 'execute'):
-            self._playblast.execute(
-                outDir, fname, pad, overscan, ornaments, viewer, 
-                offscreen, overwrite, camera, cam_range
-            )
 
 #-------------------------------------------------------------------------
-# Tab 2: Shot Mask Options
+# Shot Mask Tab Widget
 #-------------------------------------------------------------------------
 class ShotMaskTabWidget(QtWidgets.QWidget):
     collapsed_state_changed = QtCore.Signal()
@@ -1700,372 +1919,57 @@ class ShotMaskTabWidget(QtWidgets.QWidget):
 
         camera_name = ConestogaShotMask.get_camera_name()
         if not camera_name:
-            camera_name = ShotMaskTabWidget.ALL_CAMERAS
-        self.camera_le.setText(camera_name)
+class ConestogaPlayblast(QtCore.QObject):
+    DEFAULT_FFMPEG_PATH = ""
 
-        try:
-            label_text = ConestogaShotMask.get_label_text()
-            for i in range(len(label_text)):
-                self.label_line_edits[i].setText(label_text[i])
-        except:
-            pass
+    RESOLUTION_PRESETS = [
+        ["Render", ()],
+    ]
 
-        label_font = ConestogaShotMask.get_label_font()
-        self.font_le.setText(label_font)
+    FRAME_RANGE_PRESETS = [
+        "Animation",
+        "Playback",
+        "Render",
+        "Camera",
+    ]
 
-        label_color = ConestogaShotMask.get_label_color()
-        self.label_color_btn.set_color(label_color)
-        self.label_transparency_dsb.setValue(label_color[3])
-        self.label_scale_dsb.setValue(ConestogaShotMask.get_label_scale())
+    VIDEO_ENCODER_LOOKUP = {
+        "mov": ["h264"],
+        "mp4": ["h264"],
+        "Image": ["jpg", "png", "tif"],
+    }
 
-        border_visible = ConestogaShotMask.get_border_visible()
-        self.top_border_cb.setChecked(border_visible[0])
-        self.bottom_border_cb.setChecked(border_visible[1])
+    H264_QUALITIES = {
+        "Very High": 18,
+        "High": 20,
+        "Medium": 23,
+        "Low": 26,
+    }
 
-        border_color = ConestogaShotMask.get_border_color()
-        self.border_color_btn.set_color(border_color)
-        self.border_transparency_dsb.setValue(border_color[3])
-        
-        border_ar_enabled = ConestogaShotMask.is_border_aspect_ratio_enabled()
-        self.frame_border_to_aspect_ratio_cb.setChecked(border_ar_enabled)
-        
-        self.border_aspect_ratio_dsb.setVisible(border_ar_enabled)
-        self.border_scale_dsb.setVisible(not border_ar_enabled)
-        self.border_size_type_text.setText("Aspect Ratio:" if border_ar_enabled else "Scale:")
-        
-        self.border_aspect_ratio_dsb.setValue(ConestogaShotMask.get_border_aspect_ratio())
-        self.border_scale_dsb.setValue(ConestogaShotMask.get_border_scale())
+    H264_PRESETS = [
+        "veryslow",
+        "slow",
+        "medium",
+        "fast",
+        "faster",
+        "ultrafast",
+    ]
 
-        self.counter_padding_sb.setValue(ConestogaShotMask.get_counter_padding())
-
-        self._update_mask_enabled = True
-
-    def on_collapsed_state_changed(self):
-        self.collapsed_state_changed.emit()
-
-    def on_border_aspect_ratio_enabled_changed(self, enabled):
-        self.border_aspect_ratio_dsb.setVisible(enabled)
-        self.border_scale_dsb.setVisible(not enabled)
-        self.border_size_type_text.setText("Aspect Ratio:" if enabled else "Scale:")
-        self.update_mask()
-
-    def show_camera_select_dialog(self):
-        if not self._camera_select_dialog:
-            self._camera_select_dialog = ConestogaCameraSelectDialog(self)
-            
-        self._camera_select_dialog.set_multi_select_enabled(False)
-        self._camera_select_dialog.set_camera_list_text("Select a camera to restrict the shot mask, or select <All Cameras> to show on all cameras")
-        self._camera_select_dialog.set_select_btn_text("Select")
-        
-        cameras = [ShotMaskTabWidget.ALL_CAMERAS]
-        selected = []
-        
-        camera_name = self.camera_le.text()
-        if camera_name and camera_name != ShotMaskTabWidget.ALL_CAMERAS:
-            selected.append(camera_name)
-        elif camera_name == ShotMaskTabWidget.ALL_CAMERAS:
-            selected.append(ShotMaskTabWidget.ALL_CAMERAS)
-            
-        self._camera_select_dialog.refresh_list(selected, True, True, cameras)
-        
-        if self._camera_select_dialog.exec_() == QtWidgets.QDialog.Accepted:
-            selected = self._camera_select_dialog.get_selected()
-            if len(selected) > 0:
-                self.camera_le.setText(selected[0])
-                self.update_mask()
-
-    def show_font_select_dialog(self):
-        current_font = QtGui.QFont(self.font_le.text())
-        font, ok = QtWidgets.QFontDialog.getFont(current_font, self)
-        if ok:
-            self.font_le.setText(font.family())
-            self.update_mask()
-
-#-------------------------------------------------------------------------
-# Tab 3: Settings / Logging
-#-------------------------------------------------------------------------
-class SettingsTabWidget(QtWidgets.QWidget):
-    def __init__(self, parent=None):
-        super(SettingsTabWidget, self).__init__(parent)
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QtWidgets.QVBoxLayout(self)
-        
-        # About section with version info
-        aboutText = (
-            '<h3>Conestoga Playblast Tool</h3>'
-            '<h3>v1.0.0</h3>'
-            '<p>Conestoga College<br>'
-            '<a style="color:white;text-decoration:none;" href="http://conestogac.on.ca">conestogac.on.ca</a></p>'
-        )
-        
-        aboutLabel = QtWidgets.QLabel(aboutText)
-        aboutLabel.setOpenExternalLinks(True)
-        aboutLabel.setAlignment(QtCore.Qt.AlignCenter)
-        layout.addWidget(aboutLabel)
-        
-        # Playblast settings
-        playblastGroup = ConestogaCollapsibleGrpWidget("Playblast")
-        playblastLayout = QtWidgets.QFormLayout()
-        
-        # FFmpeg path
-        ffmpegLayout = QtWidgets.QHBoxLayout()
-        self.ffmpegPathLE = QtWidgets.QLineEdit()
-        self.ffmpegPathLE.setPlaceholderText("<path to ffmpeg executable>")
-        self.ffmpegSelectBtn = QtWidgets.QPushButton("...")
-        ffmpegLayout.addWidget(self.ffmpegPathLE)
-        ffmpegLayout.addWidget(self.ffmpegSelectBtn)
-        playblastLayout.addRow("FFmpeg Path:", ffmpegLayout)
-        
-        # Temp directory
-        tempDirLayout = QtWidgets.QHBoxLayout()
-        self.tempDirLE = QtWidgets.QLineEdit()
-        self.tempDirLE.setPlaceholderText("<temp directory path>")
-        self.tempDirSelectBtn = QtWidgets.QPushButton("...")
-        tempDirLayout.addWidget(self.tempDirLE)
-        tempDirLayout.addWidget(self.tempDirSelectBtn)
-        playblastLayout.addRow("Temp Directory:", tempDirLayout)
-        
-        # Temp file format
-        self.tempFormatCombo = QtWidgets.QComboBox()
-        self.tempFormatCombo.addItems(["movie", "png", "tga", "tif"])
-        formatLayout = QtWidgets.QHBoxLayout()
-        formatLayout.addWidget(self.tempFormatCombo)
-        formatLayout.addStretch()
-        playblastLayout.addRow("Temp Format:", formatLayout)
-        
-        # Reset button
-        resetLayout = QtWidgets.QHBoxLayout()
-        resetLayout.addStretch()
-        self.resetPlayblastBtn = QtWidgets.QPushButton("Reset Playblast Settings")
-        resetLayout.addWidget(self.resetPlayblastBtn)
-        resetLayout.addStretch()
-        
-        playblastGroup.add_layout(playblastLayout)
-        playblastGroup.add_layout(resetLayout)
-        layout.addWidget(playblastGroup)
-        
-        # Shot mask settings
-        shotMaskGroup = ConestogaCollapsibleGrpWidget("Shot Mask")
-        shotMaskLayout = QtWidgets.QFormLayout()
-        
-        # Logo path
-        logoLayout = QtWidgets.QHBoxLayout()
-        self.logoPathLE = QtWidgets.QLineEdit()
-        self.logoPathLE.setPlaceholderText("<path to logo image>")
-        self.logoSelectBtn = QtWidgets.QPushButton("...")
-        logoLayout.addWidget(self.logoPathLE)
-        logoLayout.addWidget(self.logoSelectBtn)
-        shotMaskLayout.addRow("Logo Path:", logoLayout)
-        
-        # Reset button
-        resetSMLayout = QtWidgets.QHBoxLayout()
-        resetSMLayout.addStretch()
-        self.resetShotMaskBtn = QtWidgets.QPushButton("Reset Shot Mask Settings")
-        resetSMLayout.addWidget(self.resetShotMaskBtn)
-        resetSMLayout.addStretch()
-        
-        shotMaskGroup.add_layout(shotMaskLayout)
-        shotMaskGroup.add_layout(resetSMLayout)
-        layout.addWidget(shotMaskGroup)
-        
-        # Add logging if needed
-        loggingGroup = ConestogaCollapsibleGrpWidget("Logging")
-        loggingLayout = QtWidgets.QVBoxLayout()
-        
-        self.loggingTextEdit = QtWidgets.QPlainTextEdit()
-        self.loggingTextEdit.setReadOnly(True)
-        
-        logControlsLayout = QtWidgets.QHBoxLayout()
-        self.logToScriptEditorCB = QtWidgets.QCheckBox("Log to Script Editor")
-        self.clearLogBtn = QtWidgets.QPushButton("Clear Log")
-        logControlsLayout.addWidget(self.logToScriptEditorCB)
-        logControlsLayout.addStretch()
-        logControlsLayout.addWidget(self.clearLogBtn)
-        
-        loggingLayout.addWidget(self.loggingTextEdit)
-        loggingLayout.addLayout(logControlsLayout)
-        
-        loggingGroup.add_layout(loggingLayout)
-        layout.addWidget(loggingGroup)
-        
-        layout.addStretch()
-        
-        # Connect signals
-        self.ffmpegSelectBtn.clicked.connect(self.select_ffmpeg)
-        self.tempDirSelectBtn.clicked.connect(self.select_temp_dir)
-        self.logoSelectBtn.clicked.connect(self.select_logo)
-        self.resetPlayblastBtn.clicked.connect(self.reset_playblast_settings)
-        self.resetShotMaskBtn.clicked.connect(self.reset_shot_mask_settings)
-        self.clearLogBtn.clicked.connect(self.loggingTextEdit.clear)
-        
-    def select_ffmpeg(self):
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Select FFmpeg Executable", 
-            self.ffmpegPathLE.text(), 
-            "Executable Files (*.exe);;All Files (*)")
-        if file_path:
-            self.ffmpegPathLE.setText(file_path)
-            # Update FFmpeg path in settings
-            ConestogaPlayblastUtils.set_ffmpeg_path(file_path)
-            
-    def select_temp_dir(self):
-        dir_path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Temporary Directory", 
-            self.tempDirLE.text())
-        if dir_path:
-            self.tempDirLE.setText(dir_path)
-            # Update temp directory in settings
-            ConestogaPlayblastUtils.set_temp_output_dir_path(dir_path)
-            
-    def select_logo(self):
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Select Logo Image", 
-            self.logoPathLE.text(), 
-            "Image Files (*.png *.jpg *.jpeg *.tif *.tiff);;All Files (*)")
-        if file_path:
-            self.logoPathLE.setText(file_path)
-            # Update logo path in settings
-            if hasattr(ConestogaPlayblastUtils, 'set_logo_path'):
-                ConestogaPlayblastUtils.set_logo_path(file_path)
-            
-    def reset_playblast_settings(self):
-        result = QtWidgets.QMessageBox.question(
-            self, "Confirm Reset", 
-            "Are you sure you want to reset playblast settings to defaults?",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        if result == QtWidgets.QMessageBox.Yes:
-            # Reset playblast settings
-            self.ffmpegPathLE.clear()
-            self.tempDirLE.clear()
-            self.tempFormatCombo.setCurrentIndex(0)
-            
-    def reset_shot_mask_settings(self):
-        result = QtWidgets.QMessageBox.question(
-            self, "Confirm Reset", 
-            "Are you sure you want to reset shot mask settings to defaults?",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        if result == QtWidgets.QMessageBox.Yes:
-            # Reset shot mask settings
-            self.logoPathLE.clear()
-            ConestogaShotMask.reset_settings()
-            
-#-------------------------------------------------------------------------
-# Main UI Window
-#-------------------------------------------------------------------------
-class ConestogaPlayblastWindow(QtWidgets.QMainWindow):
-    def __init__(self, parent=None):
-        super(ConestogaPlayblastWindow, self).__init__(parent)
-        self.setWindowTitle("Conestoga Playblast Tool")
-        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        
-        # Create central widget and main layout
-        central_widget = QtWidgets.QWidget()
-        self.setCentralWidget(central_widget)
-        
-        main_layout = QtWidgets.QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(2, 2, 2, 2)
-        main_layout.setSpacing(0)
-        
-        # Create tab widget and tabs
-        self.tab_widget = QtWidgets.QTabWidget()
-        
-        # Create and add the tab widgets
-        self.playblast_tab = PlayblastTabWidget()
-        self.shot_mask_tab = ShotMaskTabWidget()
-        self.settings_tab = SettingsTabWidget()
-        
-        self.tab_widget.addTab(self.playblast_tab, "Playblast")
-        self.tab_widget.addTab(self.shot_mask_tab, "Shot Mask")
-        self.tab_widget.addTab(self.settings_tab, "Settings")
-        
-        main_layout.addWidget(self.tab_widget)
-        
-        # Add status bar with buttons
-        status_layout = QtWidgets.QHBoxLayout()
-        status_layout.setContentsMargins(4, 4, 4, 4)
-        
-        self.logo_label = QtWidgets.QLabel("Conestoga College")
-        
-        self.create_mask_btn = QtWidgets.QPushButton("Create Shot Mask")
-        self.create_mask_btn.setToolTip("Create a new shot mask node")
-        
-        self.delete_mask_btn = QtWidgets.QPushButton("Delete Shot Mask")
-        self.delete_mask_btn.setToolTip("Delete the shot mask node")
-        
-        status_layout.addWidget(self.logo_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.create_mask_btn)
-        status_layout.addWidget(self.delete_mask_btn)
-        
-        main_layout.addLayout(status_layout)
-        
-        # Connect signals
-        self.create_mask_btn.clicked.connect(self.shot_mask_tab.create_mask)
-        self.delete_mask_btn.clicked.connect(self.shot_mask_tab.delete_mask)
-        self.playblast_tab.artist_name_changed.connect(self.update_artist_name)
-        self.shot_mask_tab.collapsed_state_changed.connect(self.adjust_size)
-        
-        # Initial update
-        self.update_mask_button_states()
-        
-    def update_artist_name(self, name):
-        if name:
-            self.logo_label.setText("Conestoga College - {0}".format(name))
-        else:
-            self.logo_label.setText("Conestoga College")
-            
-    def update_mask_button_states(self):
-        has_mask = ConestogaShotMask.get_mask() is not None
-        self.create_mask_btn.setEnabled(not has_mask)
-        self.delete_mask_btn.setEnabled(has_mask)
-        
-    def showEvent(self, event):
-        super(ConestogaPlayblastWindow, self).showEvent(event)
-        self.update_mask_button_states()
-        
-    def adjust_size(self):
-        self.adjustSize()
-        
-#-------------------------------------------------------------------------
-# Global Variable and UI Display Functions
-#-------------------------------------------------------------------------
-_conestoga_playblast_window = None
-
-def show_ui():
-    """Show the Conestoga Playblast Tool UI"""
-    global _conestoga_playblast_window
-    
-    if _conestoga_playblast_window is None:
-        # Load the plugin
-        ConestogaPlayblastUtils.load_plugin()
-        
-        # Get Maya main window as parent
-        maya_main_window = None
-        for obj in QtWidgets.QApplication.topLevelWidgets():
-            if obj.objectName() == "MayaWindow":
-                maya_main_window = obj
-                break
-        
-        # Create the window
-        _conestoga_playblast_window = ConestogaPlayblastWindow(maya_main_window)
-        
-    # Show the window
-    _conestoga_playblast_window.show()
-    _conestoga_playblast_window.raise_()
-    _conestoga_playblast_window.activateWindow()
-    
-    return _conestoga_playblast_window
-
-def close_ui():
-    """Close the Conestoga Playblast Tool UI"""
-    global _conestoga_playblast_window
-    
-    if _conestoga_playblast_window is not None:
-        _conestoga_playblast_window.close()
-        _conestoga_playblast_window = None
-        
-# Auto-run when executed directly
-if __name__ == "__main__":
-    show_ui()
+    VIEWPORT_VISIBILITY_LOOKUP = [
+        ["Controllers", "controllers"],
+        ["NURBS Curves", "nurbsCurves"],
+        ["NURBS Surfaces", "nurbsSurfaces"],
+        ["NURBS CVs", "cv"],
+        ["NURBS Hulls", "hulls"],
+        ["Polygons", "polymeshes"],
+        ["Subdiv Surfaces", "subdivSurfaces"],
+        ["Planes", "planes"],
+        ["Lights", "lights"],
+        ["Cameras", "cameras"],
+        ["Image Planes", "imagePlane"],
+        ["Joints", "joints"],
+        ["IK Handles", "ikHandles"],
+        ["Deformers", "deformers"],
+        ["Dynamics", "dynamics"],
+        ["Particle Instancers", "particleInstancers"],
+        ["
