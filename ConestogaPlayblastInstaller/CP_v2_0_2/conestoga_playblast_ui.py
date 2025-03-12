@@ -2042,13 +2042,34 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
     def reset_name_generator(self):
         """
         Reset all name generator fields to default values.
+        Also updates the shot mask artist name if configured.
         """
+        # Keep the original reset functionality
         self.assignmentSpinBox.setValue(1)
         self.lastnameLineEdit.clear()
         self.firstnameLineEdit.clear()
         self.versionTypeCombo.setCurrentIndex(0)  # "wip"
         self.versionNumberSpinBox.setValue(1)
         self.update_filename_preview()
+        
+        # Add shot mask artist name update
+        try:
+            # Only proceed if the ConestogaShotMask is accessible
+            if 'ConestogaShotMask' in globals():
+                # Get current shot mask text
+                current_labels = ConestogaShotMask.get_label_text()
+                
+                # Update the bottom-left position (index 3) which typically holds the username
+                # Only change if it doesn't already use the {username} tag
+                if current_labels and len(current_labels) > 3:
+                    if "{username}" not in current_labels[3]:
+                        current_labels[3] = "{username}"
+                        ConestogaShotMask.set_label_text(current_labels)
+                        ConestogaShotMask.refresh_mask()
+        except Exception as e:
+            # Log error but don't disrupt the main functionality
+            print("Note: Could not update shot mask during name generator reset: {}".format(e))
+    
 
     def generate_filename(self):
         """
@@ -2069,72 +2090,87 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         filename = f"A{assignment}_{lastname}_{firstname}_{version_type}_{version_number}.mov"
         self.output_filename_le.setText(filename)
 
+    # First, add a method to update the shot mask with artist name
     def update_artist_name(self):
         """
-        This function would update an artist name field if available in the UI.
-        For this integration, we'll check if there is a HUD checkbox or user name field.
+        Updates the shot mask with the artist name from the name generator.
         """
-        # This function would be useful if the UI has a field for artist name display
-        # Since the original Conestoga Playblast UI doesn't have this field,
-        # this is a placeholder for possible future integration
-        pass
-
-    def do_playblast(self, batch_cameras=[]):
-        output_dir_path = self.output_dir_path_le.text()
-        if not output_dir_path:
-            output_dir_path = self.output_dir_path_le.placeholderText()
-
-        filename = self.output_filename_le.text()
-        if not filename:
-            filename = self.output_filename_le.placeholderText()
-
-        padding = ConestogaPlayblast.DEFAULT_PADDING
-
-        overscan = self.overscan_cb.isChecked()
-        show_ornaments = self.ornaments_cb.isChecked()
-        show_in_viewer = self.viewer_cb.isChecked()
-        overwrite = self.force_overwrite_cb.isChecked()
-        use_camera_frame_range = self.frame_range_cmb.currentText() == "Camera"
-        offscreen = self.offscreen_cb.isChecked()
-
-        display_shot_mask = self.shot_mask_cb.isChecked()
-        shot_mask_visible = ConestogaShotMask.get_mask()
-        fit_shot_mask = self.fit_shot_mask_cb.isChecked()
-
-        orig_camera = ConestogaShotMask.get_camera_name()
-
-        cmds.evalDeferred(partial(self.pre_playblast, display_shot_mask, shot_mask_visible, fit_shot_mask))
-
-        if batch_cameras:
-            for batch_camera in batch_cameras:
-                batch_camera_filename = filename
-                if "{camera}" not in batch_camera_filename:
-                    batch_camera_filename = "{0}_{{camera}}".format(filename)
-
-                cmds.evalDeferred(partial(self._playblast.execute, output_dir_path, batch_camera_filename, padding, overscan, show_ornaments, show_in_viewer, offscreen, overwrite, batch_camera, use_camera_frame_range))
-        else:
-            cmds.evalDeferred(partial(self._playblast.execute, output_dir_path, filename, padding, overscan, show_ornaments, show_in_viewer, offscreen, overwrite, "", use_camera_frame_range))
-
-        cmds.evalDeferred(partial(self.post_playblast, display_shot_mask, shot_mask_visible, fit_shot_mask, orig_camera))
-
-    def pre_playblast(self, display_shot_mask, shot_mask_visible, fit_shot_mask):
-        if display_shot_mask:
-            if fit_shot_mask:
-                # Fit shot mask to playbast width/height
-                self.orig_render_width = cmds.getAttr("defaultResolution.width")
-                self.orig_render_device_aspect_ratio = cmds.getAttr("defaultResolution.deviceAspectRatio")
-
-                playblast_width, playblast_height = self._playblast.get_resolution_width_height()
-                cmds.setAttr("defaultResolution.width", playblast_width)
-                cmds.setAttr("defaultResolution.deviceAspectRatio", playblast_width / float(playblast_height))
-
-            ConestogaShotMask.set_camera_name("")
-            if shot_mask_visible:
-                ConestogaShotMask.refresh_mask()
+        # Get current labels
+        current_labels = ConestogaShotMask.get_label_text()
+        
+        # Create artist name string from first and last name
+        lastname = self.lastnameLineEdit.text()
+        firstname = self.firstnameLineEdit.text()
+        
+        # Determine which label position to use (typically bottom-left, index 3)
+        artist_label_index = 3
+        
+        if lastname or firstname:
+            # If we have a name, format it appropriately
+            if lastname and firstname:
+                artist_name = f"{firstname} {lastname}"
             else:
-                ConestogaShotMask.create_mask()
+                artist_name = lastname or firstname
+                
+            # Update the label, preserving any other content
+            # Check if there's already a {username} tag we should replace
+            if "{username}" in current_labels[artist_label_index]:
+                current_labels[artist_label_index] = current_labels[artist_label_index].replace("{username}", artist_name)
+            else:
+                # If no username tag, just set the artist name
+                current_labels[artist_label_index] = artist_name
         else:
-            ConestogaShotMask.delete_mask()
+            # If no name provided, reset to default username tag
+            if not "{username}" in current_labels[artist_label_index]:
+                current_labels[artist_label_index] = "{username}"
+        
+        # Update the shot mask
+        ConestogaShotMask.set_label_text(current_labels)
+        ConestogaShotMask.refresh_mask()
+
+    # Then modify the reset function to clear the artist name properly
+    def reset_name_generator(self):
+        """
+        Reset all name generator fields to default values and update the shot mask.
+        """
+        self.assignmentSpinBox.setValue(1)
+        self.lastnameLineEdit.clear()
+        self.firstnameLineEdit.clear()
+        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
+        self.versionNumberSpinBox.setValue(1)
+        self.update_filename_preview()
+        
+        # Update the shot mask after resetting fields
+        self.update_artist_name()
+
+        # Then modify the reset function to clear the artist name properly
+    def reset_name_generator(self):
+        """
+        Reset all name generator fields to default values.
+        """
+        self.assignmentSpinBox.setValue(1)
+        self.lastnameLineEdit.clear()
+        self.firstnameLineEdit.clear()
+        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
+        self.versionNumberSpinBox.setValue(1)
+        self.update_filename_preview()
+        
+        # After resetting the name generator fields, also update the artist name
+        # in the shot mask if needed
+        try:
+            # Only update the username text if the artist name is connected to shot mask
+            current_labels = ConestogaShotMask.get_label_text()
+            # Find the label that typically contains the username (often bottom-left)
+            username_index = 3  # Bottom-left position
+            
+            # Only modify if it's not already using the username tag
+            if "{username}" not in current_labels[username_index]:
+                current_labels[username_index] = "{username}"
+                ConestogaShotMask.set_label_text(current_labels)
+                ConestogaShotMask.refresh_mask()
+        except Exception as e:
+            # Silently handle any issues to prevent disruption to the reset process
+            print("Note: Could not update shot mask username: {}".format(e))
 
     def post_playblast(self, display_shot_mask, shot_mask_visible, fit_shot_mask, orig_camera):
         if display_shot_mask:
@@ -2525,6 +2561,80 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
     def hideEvent(self, e):
         self.save_settings()
 
+    def do_playblast(self, batch_cameras=None):
+            """
+            Execute the playblast with current settings.
+            
+            Args:
+                batch_cameras (list, optional): List of cameras to batch process. If None,
+                                                uses the selected camera in the UI.
+            """
+            output_dir = self.output_dir_path_le.text()
+            if not output_dir:
+                output_dir = self.output_dir_path_le.placeholderText()
+            
+            filename = self.output_filename_le.text()
+            force_overwrite = self.force_overwrite_cb.isChecked()
+            
+            show_ornaments = self.ornaments_cb.isChecked()
+            overscan = self.overscan_cb.isChecked()
+            offscreen = self.offscreen_cb.isChecked()
+            show_in_viewer = self.viewer_cb.isChecked()
+            display_shot_mask = self.shot_mask_cb.isChecked()
+            fit_shot_mask = self.fit_shot_mask_cb.isChecked()
+            
+            if display_shot_mask:
+                # Store the original camera to restore later
+                orig_camera = self._playblast.get_active_camera()
+                
+                # Store original render settings if needed for shot mask fitting
+                if fit_shot_mask:
+                    self.orig_render_width = cmds.getAttr("defaultResolution.width")
+                    self.orig_render_device_aspect_ratio = cmds.getAttr("defaultResolution.deviceAspectRatio")
+                
+                # Setup for shot mask
+                shot_mask_visible = ConestogaShotMask.get_mask() is not None
+                
+                if not shot_mask_visible:
+                    ConestogaShotMask.create_mask()
+            
+            try:
+                # If doing batch playblasts
+                if batch_cameras:
+                    for camera in batch_cameras:
+                        # Skip the "All Cameras" option if it was selected
+                        if camera == ConestogaShotMaskWidget.ALL_CAMERAS:
+                            continue
+                        
+                        # Execute the playblast for this camera
+                        self._playblast.execute(
+                            output_dir=output_dir, 
+                            filename=filename, 
+                            overscan=overscan, 
+                            show_ornaments=show_ornaments, 
+                            show_in_viewer=show_in_viewer, 
+                            offscreen=offscreen, 
+                            overwrite=force_overwrite,
+                            camera_override=camera
+                        )
+                else:
+                    # Single camera playblast
+                    self._playblast.execute(
+                        output_dir=output_dir, 
+                        filename=filename, 
+                        overscan=overscan, 
+                        show_ornaments=show_ornaments, 
+                        show_in_viewer=show_in_viewer, 
+                        offscreen=offscreen, 
+                        overwrite=force_overwrite
+                    )
+            finally:
+                # Restore original settings if we modified them for shot mask
+                if display_shot_mask:
+                    self.post_playblast(display_shot_mask, shot_mask_visible, fit_shot_mask, orig_camera)
+            
+            # Save settings after playblast is complete
+            self.save_settings()
 
 class ConestogaShotMask(object):
 
@@ -3533,6 +3643,42 @@ class ConestogaPlayblastUi(QtWidgets.QWidget):
         main_layout.addWidget(self.main_tab_wdg)
         main_layout.addLayout(button_layout)
         main_layout.addLayout(status_bar_layout)
+
+    def update_ui_elements(self):
+        self._update_mask_enabled = False
+
+        camera_name = ConestogaShotMask.get_camera_name()
+        if not camera_name:
+            camera_name = ConestogaShotMaskWidget.ALL_CAMERAS
+        self.camera_le.setText(camera_name)
+
+        label_text = ConestogaShotMask.get_label_text()
+        for i in range(len(label_text)):
+            self.label_line_edits[i].setText(label_text[i])
+
+        self.font_le.setText(ConestogaShotMask.get_label_font())
+        self.label_scale_dsb.setValue(ConestogaShotMask.get_label_scale())
+
+        label_color = ConestogaShotMask.get_label_color()
+        self.label_color_btn.set_color(label_color)
+        self.label_transparency_dsb.setValue(label_color[3])
+
+        border_visible = ConestogaShotMask.get_border_visible()
+        self.top_border_cb.setChecked(border_visible[0])
+        self.bottom_border_cb.setChecked(border_visible[1])
+        self.border_scale_dsb.setValue(ConestogaShotMask.get_border_scale())
+
+        border_color = ConestogaShotMask.get_border_color()
+        self.border_color_btn.set_color(border_color)
+        self.border_transparency_dsb.setValue(border_color[3])
+
+        self.frame_border_to_aspect_ratio_cb.setChecked(ConestogaShotMask.is_border_aspect_ratio_enabled())
+        self.border_aspect_ratio_dsb.setValue(ConestogaShotMask.get_border_aspect_ratio())
+        self.on_border_aspect_ratio_enabled_changed()
+
+        self.counter_padding_sb.setValue(ConestogaShotMask.get_counter_padding())
+
+        self._update_mask_enabled = True
 
     def create_connections(self):
         self.settings_wdg.playblast_reset.connect(self.playblast_wdg.reset_settings)
