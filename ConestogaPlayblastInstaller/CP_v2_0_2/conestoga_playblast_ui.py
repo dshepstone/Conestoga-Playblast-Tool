@@ -2040,36 +2040,55 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         self.filenamePreviewLabel.setText(filename)
 
     def reset_name_generator(self):
-        """
-        Reset all name generator fields to default values.
-        Also updates the shot mask artist name if configured.
-        """
-        # Keep the original reset functionality
-        self.assignmentSpinBox.setValue(1)
-        self.lastnameLineEdit.clear()
-        self.firstnameLineEdit.clear()
-        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
-        self.versionNumberSpinBox.setValue(1)
-        self.update_filename_preview()
-        
-        # Add shot mask artist name update
-        try:
-            # Only proceed if the ConestogaShotMask is accessible
-            if 'ConestogaShotMask' in globals():
-                # Get current shot mask text
-                current_labels = ConestogaShotMask.get_label_text()
-                
-                # Update the bottom-left position (index 3) which typically holds the username
-                # Only change if it doesn't already use the {username} tag
-                if current_labels and len(current_labels) > 3:
-                    if "{username}" not in current_labels[3]:
-                        current_labels[3] = "{username}"
-                        ConestogaShotMask.set_label_text(current_labels)
-                        ConestogaShotMask.refresh_mask()
-        except Exception as e:
-            # Log error but don't disrupt the main functionality
-            print("Note: Could not update shot mask during name generator reset: {}".format(e))
+            """
+            Reset all name generator fields to default values and update the shot mask.
+            """
+            # Reset name generator fields
+            self.assignmentSpinBox.setValue(1)
+            self.lastnameLineEdit.clear()
+            self.firstnameLineEdit.clear()
+            self.versionTypeCombo.setCurrentIndex(0)  # "wip"
+            self.versionNumberSpinBox.setValue(1)
+            self.update_filename_preview()
+            
+            # Check if shot mask exists and update it
+            mask = ConestogaShotMask.get_mask()
+            shot_mask_visible = mask is not None
+            
+            if shot_mask_visible:
+                try:
+                    # Get current labels and modify the artist field (bottom-left)
+                    current_labels = ConestogaShotMask.get_label_text()
+                    # Set bottom-left label (index 3) to the default {username} tag
+                    current_labels[3] = "{username}"
+                    ConestogaShotMask.set_label_text(current_labels)
+                    
+                    # Toggle mask to refresh display
+                    ConestogaShotMask.delete_mask()
+                    ConestogaShotMask.create_mask()
+                except Exception as e:
+                    print("Note: Could not reset shot mask: {}".format(e))
     
+    def toggle_shot_mask(self):
+        """
+        Toggle the shot mask visibility. If it was visible, hide it then show it again.
+        This helps ensure the mask is properly refreshed with new settings.
+        """
+        try:
+            # Check if shot mask exists
+            mask_exists = ConestogaShotMask.get_mask() is not None
+            
+            if mask_exists:
+                # Delete the mask first
+                ConestogaShotMask.delete_mask()
+                # Then recreate it
+                ConestogaShotMask.create_mask()
+            else:
+                # Just create a new mask if it didn't exist
+                ConestogaShotMask.create_mask()
+                
+        except Exception as e:
+            self.append_output("[WARNING] Could not toggle shot mask: {}".format(e))
 
     def generate_filename(self):
         """
@@ -2095,55 +2114,41 @@ class ConestogaPlayblastWidget(QtWidgets.QWidget):
         """
         Updates the shot mask with the artist name from the name generator.
         """
-        # Get current labels
-        current_labels = ConestogaShotMask.get_label_text()
-        
-        # Create artist name string from first and last name
-        lastname = self.lastnameLineEdit.text()
-        firstname = self.firstnameLineEdit.text()
-        
-        # Determine which label position to use (typically bottom-left, index 3)
-        artist_label_index = 3
-        
-        if lastname or firstname:
-            # If we have a name, format it appropriately
-            if lastname and firstname:
-                artist_name = f"{firstname} {lastname}"
-            else:
-                artist_name = lastname or firstname
-                
-            # Update the label, preserving any other content
-            # Check if there's already a {username} tag we should replace
-            if "{username}" in current_labels[artist_label_index]:
-                current_labels[artist_label_index] = current_labels[artist_label_index].replace("{username}", artist_name)
-            else:
-                # If no username tag, just set the artist name
+        mask = ConestogaShotMask.get_mask()
+        if not mask:
+            return  # No shot mask to update
+            
+        try:
+            # Get current labels
+            current_labels = ConestogaShotMask.get_label_text()
+            
+            # Create artist name string from first and last name
+            lastname = self.lastnameLineEdit.text()
+            firstname = self.firstnameLineEdit.text()
+            
+            # Bottom-left position (index 3) typically holds the username
+            artist_label_index = 3
+            
+            if lastname or firstname:
+                # If we have a name, format it appropriately
+                if lastname and firstname:
+                    artist_name = f"{firstname} {lastname}"
+                else:
+                    artist_name = lastname or firstname
+                    
+                # Update the label
                 current_labels[artist_label_index] = artist_name
-        else:
-            # If no name provided, reset to default username tag
-            if not "{username}" in current_labels[artist_label_index]:
+            else:
+                # If no name provided, reset to default username tag
                 current_labels[artist_label_index] = "{username}"
-        
-        # Update the shot mask
-        ConestogaShotMask.set_label_text(current_labels)
-        ConestogaShotMask.refresh_mask()
+            
+            # Update the shot mask
+            ConestogaShotMask.set_label_text(current_labels)
+            ConestogaShotMask.refresh_mask()
+        except Exception as e:
+            print("Note: Could not update shot mask artist name: {}".format(e))
 
     # Then modify the reset function to clear the artist name properly
-    def reset_name_generator(self):
-        """
-        Reset all name generator fields to default values and update the shot mask.
-        """
-        self.assignmentSpinBox.setValue(1)
-        self.lastnameLineEdit.clear()
-        self.firstnameLineEdit.clear()
-        self.versionTypeCombo.setCurrentIndex(0)  # "wip"
-        self.versionNumberSpinBox.setValue(1)
-        self.update_filename_preview()
-        
-        # Update the shot mask after resetting fields
-        self.update_artist_name()
-
-        # Then modify the reset function to clear the artist name properly
     def reset_name_generator(self):
         """
         Reset all name generator fields to default values.
