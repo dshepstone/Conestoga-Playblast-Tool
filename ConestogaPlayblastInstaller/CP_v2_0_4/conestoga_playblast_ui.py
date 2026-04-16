@@ -1853,6 +1853,11 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
 
         # Name Generator widgets
+        self.assignmentLetterCombo = QtWidgets.QComboBox()
+        self.assignmentLetterCombo.addItems(["A", "B", "C", "D", "E", "F"])
+        self.assignmentLetterCombo.setCurrentText("A")
+        self.assignmentLetterCombo.setFixedWidth(50)
+
         self.assignmentSpinBox = QtWidgets.QSpinBox()
         self.assignmentSpinBox.setRange(1, 99)
         self.assignmentSpinBox.setValue(1)
@@ -1865,14 +1870,18 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.firstnameLineEdit.setPlaceholderText("First Name")
 
         self.versionTypeCombo = QtWidgets.QComboBox()
-        self.versionTypeCombo.addItems(["wip", "final"])
+        self.versionTypeCombo.addItems(["Planning", "Posing", "Blocking", "BlockingPlus", "Spline", "Polish"])
+        self.versionTypeCombo.setCurrentText("Blocking")
 
         self.versionNumberSpinBox = QtWidgets.QSpinBox()
         self.versionNumberSpinBox.setRange(1, 99)
         self.versionNumberSpinBox.setValue(1)
         self.versionNumberSpinBox.setFixedWidth(50)
 
-        self.filenamePreviewLabel = QtWidgets.QLabel("A1_LastName_FirstName_wip_01.mov")
+        self.compactNameCheckBox = QtWidgets.QCheckBox("Use compact filename")
+        self.compactNameCheckBox.setChecked(False)
+
+        self.filenamePreviewLabel = QtWidgets.QLabel("LastName_FirstName_A1_Blocking_1")
         self.filenamePreviewLabel.setStyleSheet("color: #FFC107; font-weight: bold;")
 
         self.generateFilenameButton = QtWidgets.QPushButton("Generate Filename")
@@ -2065,25 +2074,40 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         return self.frame_range_start_sb.value(), self.frame_range_end_sb.value()
 
     def update_filename_preview(self):
-        filename = "A{0}_{1}_{2}_{3}_{4:02d}".format(
-            self.assignmentSpinBox.value(),
-            (self.lastnameLineEdit.text() or "LastName").strip(),
-            (self.firstnameLineEdit.text() or "FirstName").strip(),
-            self.versionTypeCombo.currentText(),
-            self.versionNumberSpinBox.value(),
-        )
-        self.filenamePreviewLabel.setText(filename + "." + self.encoding_container_cmb.currentText().lower())
+        self.filenamePreviewLabel.setText(self.get_generated_filename(use_compact=self.compactNameCheckBox.isChecked()))
+
+    def get_generated_filename(self, use_compact=False):
+        last_name = (self.lastnameLineEdit.text() or "LastName").strip()
+        first_name = (self.firstnameLineEdit.text() or "FirstName").strip()
+        assignment = "{0}{1}".format(self.assignmentLetterCombo.currentText(), self.assignmentSpinBox.value())
+        submission_type = self.versionTypeCombo.currentText()
+        version = self.versionNumberSpinBox.value()
+
+        if use_compact:
+            first_name = first_name[0] if first_name else "F"
+            compact_type_map = {
+                "Planning": "Plan",
+                "Posing": "Pose",
+                "Blocking": "Blk",
+                "BlockingPlus": "Blk+",
+                "Spline": "Spl",
+                "Polish": "Pol",
+            }
+            submission_type = compact_type_map.get(submission_type, submission_type)
+
+        return "{0}_{1}_{2}_{3}_{4}".format(last_name, first_name, assignment, submission_type, version)
 
     def apply_generated_filename(self):
-        self.update_filename_preview()
-        self.output_filename_le.setText(self.filenamePreviewLabel.text())
+        self.output_filename_le.setText(self.get_generated_filename(use_compact=self.compactNameCheckBox.isChecked()))
 
     def reset_name_generator(self):
+        self.assignmentLetterCombo.setCurrentText("A")
         self.assignmentSpinBox.setValue(1)
         self.lastnameLineEdit.clear()
         self.firstnameLineEdit.clear()
-        self.versionTypeCombo.setCurrentIndex(0)
+        self.versionTypeCombo.setCurrentText("Blocking")
         self.versionNumberSpinBox.setValue(1)
+        self.compactNameCheckBox.setChecked(False)
         self.update_filename_preview()
 
     def select_output_dir(self):
@@ -2121,7 +2145,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             self.tool_temp_dir_le.setText(directory)
 
     def use_namegen_for_shotmask(self):
-        generated = self.filenamePreviewLabel.text().strip()
+        generated = self.get_generated_filename(use_compact=False).strip()
         if generated:
             self.sm_top_center_le.setText(generated)
 
@@ -2272,10 +2296,12 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.resetNameGeneratorButton.clicked.connect(self.reset_name_generator)
 
         self.assignmentSpinBox.valueChanged.connect(self.update_filename_preview)
+        self.assignmentLetterCombo.currentIndexChanged.connect(self.update_filename_preview)
         self.lastnameLineEdit.textChanged.connect(self.update_filename_preview)
         self.firstnameLineEdit.textChanged.connect(self.update_filename_preview)
         self.versionTypeCombo.currentIndexChanged.connect(self.update_filename_preview)
         self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
+        self.compactNameCheckBox.toggled.connect(self.update_filename_preview)
 
         self.preview_btn.clicked.connect(self.on_preview)
         self.execute_btn.clicked.connect(self.on_execute)
@@ -2351,7 +2377,13 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         
         # Assignment field
         name_gen_grid.addWidget(QtWidgets.QLabel("Assignment:"), 0, 0)
-        name_gen_grid.addWidget(self.assignmentSpinBox, 0, 1)
+        assignment_layout = QtWidgets.QHBoxLayout()
+        assignment_layout.setContentsMargins(0, 0, 0, 0)
+        assignment_layout.setSpacing(4)
+        assignment_layout.addWidget(self.assignmentLetterCombo)
+        assignment_layout.addWidget(self.assignmentSpinBox)
+        assignment_layout.addStretch()
+        name_gen_grid.addLayout(assignment_layout, 0, 1, 1, 2)
         
         # Last Name field
         name_gen_grid.addWidget(QtWidgets.QLabel("Last Name:"), 1, 0)
@@ -2369,9 +2401,11 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         name_gen_grid.addWidget(QtWidgets.QLabel("Version:"), 4, 0)
         name_gen_grid.addWidget(self.versionNumberSpinBox, 4, 1)
         
+        name_gen_grid.addWidget(self.compactNameCheckBox, 5, 1, 1, 2)
+
         # Preview field
-        name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 5, 0)
-        name_gen_grid.addWidget(self.filenamePreviewLabel, 5, 1, 1, 2)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 6, 0)
+        name_gen_grid.addWidget(self.filenamePreviewLabel, 6, 1, 1, 2)
         
         # Generate and Reset buttons side by side with a modern layout
         generate_btn_layout = QtWidgets.QHBoxLayout()
