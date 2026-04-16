@@ -1010,11 +1010,6 @@ class CPPlayblast(QtCore.QObject):
         else:
             temp_file_extension = temp_file_format
 
-        viewport_model_panel = self.get_viewport_panel()
-        if not viewport_model_panel:
-            self.log_error("An active viewport is not selected. Select a viewport and retry.")
-            return
-
         if not output_dir:
             self.log_error("Output directory path not set")
             return
@@ -1022,13 +1017,18 @@ class CPPlayblast(QtCore.QObject):
             self.log_error("Output file name not set")
             return
 
-        # Store original camera
-        orig_camera = self.get_active_camera()
-
         if camera_override:
             camera = camera_override
         else:
             camera = self._camera
+
+        viewport_model_panel = self.get_viewport_panel(preferred_camera=camera)
+        if not viewport_model_panel:
+            self.log_error("No model viewport panel is available. Open a viewport and retry.")
+            return
+
+        # Store original camera from the resolved viewport
+        orig_camera = self.get_active_camera(viewport_model_panel)
 
         if not camera:
             camera = orig_camera
@@ -1123,7 +1123,7 @@ class CPPlayblast(QtCore.QObject):
         self.log_output("Playblast options: {0}\n".format(options))
         QtCore.QCoreApplication.processEvents()
 
-        self.set_active_camera(camera)
+        self.set_active_camera(camera, viewport_model_panel)
 
         orig_visibility_flags = self.create_viewport_visibility_flags(self.get_viewport_visibility())
         playblast_visibility_flags = self.create_viewport_visibility_flags(self.get_visibility())
@@ -1150,7 +1150,7 @@ class CPPlayblast(QtCore.QObject):
                 cmds.setAttr(overscan_attr, orig_overscan)
 
             # Restore original viewport settings
-            self.set_active_camera(orig_camera)
+            self.set_active_camera(orig_camera, viewport_model_panel)
             self.set_viewport_visibility(model_editor, orig_visibility_flags)
 
         if playblast_failed:
@@ -1405,25 +1405,56 @@ class CPPlayblast(QtCore.QObject):
     def get_timestamp(self):
         return "{0}".format(int(time.time()))
 
-    def get_viewport_panel(self):
-        model_panel = cmds.getPanel(withFocus=True)
-        try:
-            cmds.modelPanel(model_panel, q=True, modelEditor=True)
-        except:
+    def get_viewport_panel(self, preferred_camera=None):
+        panels = []
+
+        focused_panel = cmds.getPanel(withFocus=True)
+        if focused_panel:
+            panels.append(focused_panel)
+
+        visible_panels = cmds.getPanel(vis=True) or []
+        panels.extend(visible_panels)
+
+        model_panels = cmds.getPanel(type="modelPanel") or []
+        panels.extend(model_panels)
+
+        # de-duplicate while preserving order
+        unique_panels = []
+        for panel in panels:
+            if panel not in unique_panels:
+                unique_panels.append(panel)
+
+        valid_model_panels = []
+        for panel in unique_panels:
+            try:
+                cmds.modelPanel(panel, q=True, modelEditor=True)
+                valid_model_panels.append(panel)
+            except Exception:
+                continue
+
+        if not valid_model_panels:
             return None
 
-        return model_panel
+        if preferred_camera:
+            for panel in valid_model_panels:
+                try:
+                    if cmds.modelPanel(panel, q=True, camera=True) == preferred_camera:
+                        return panel
+                except Exception:
+                    continue
 
-    def get_active_camera(self):
-        model_panel = self.get_viewport_panel()
+        return valid_model_panels[0]
+
+    def get_active_camera(self, model_panel=None):
+        model_panel = model_panel or self.get_viewport_panel()
         if not model_panel:
             self.log_error("Failed to get active camera. A viewport is not active.")
             return None
 
         return cmds.modelPanel(model_panel, q=True, camera=True)
 
-    def set_active_camera(self, camera):
-        model_panel = self.get_viewport_panel()
+    def set_active_camera(self, camera, model_panel=None):
+        model_panel = model_panel or self.get_viewport_panel(camera)
         if model_panel:
             mel.eval("lookThroughModelPanel {0} {1}".format(camera, model_panel))
         else:
