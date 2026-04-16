@@ -2059,6 +2059,36 @@ class CPPlayblastWidget(QtWidgets.QWidget):
     def on_log_output(self, message):
         self.output_edit.appendPlainText(message)
 
+    def default_temp_output_dir(self):
+        root = cmds.workspace(q=True, rootDirectory=True)
+        if not root:
+            root = cmds.internalVar(userWorkspaceDir=True)
+        return os.path.normpath(os.path.join(root, "movies"))
+
+    def browse_ffmpeg_path(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select ffmpeg executable")
+        if path:
+            self.tool_ffmpeg_path_le.setText(path)
+
+    def browse_temp_output_dir(self):
+        start_dir = self.tool_temp_dir_le.text().strip() or self.default_temp_output_dir()
+        directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Temp Output Directory", start_dir)
+        if directory:
+            self.tool_temp_dir_le.setText(directory)
+
+    def use_namegen_for_shotmask(self):
+        generated = self.filenamePreviewLabel.text().strip()
+        if generated:
+            self.sm_top_center_le.setText(generated)
+
+    def insert_shotmask_token(self):
+        token = self.sm_common_items_cmb.currentData()
+        if not token:
+            return
+        focus = QtWidgets.QApplication.focusWidget()
+        if isinstance(focus, QtWidgets.QLineEdit):
+            focus.insert(token)
+
     def on_execute(self):
         try:
             output_dir = self.output_dir_path_le.text().strip()
@@ -2103,15 +2133,21 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             nodes = cmds.ls(type="ConestogaShotMask") or []
             mask = nodes[0] if nodes else cmds.createNode("ConestogaShotMask")
             attrs = [
-                ("topLeftText", self.sm_top_left_le.text()),
-                ("topCenterText", self.sm_top_center_le.text()),
-                ("topRightText", self.sm_top_right_le.text()),
-                ("bottomLeftText", self.sm_bottom_left_le.text()),
-                ("bottomCenterText", self.sm_bottom_center_le.text()),
-                ("bottomRightText", self.sm_bottom_right_le.text()),
+                ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
+                ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
+                ("topRightText", self.sm_top_right_le.text() if self.sm_top_right_cb.isChecked() else ""),
+                ("bottomLeftText", self.sm_bottom_left_le.text() if self.sm_bottom_left_cb.isChecked() else ""),
+                ("bottomCenterText", self.sm_bottom_center_le.text() if self.sm_bottom_center_cb.isChecked() else ""),
+                ("bottomRightText", self.sm_bottom_right_le.text() if self.sm_bottom_right_cb.isChecked() else ""),
             ]
             for attr, value in attrs:
                 cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+
+            cmds.setAttr("{0}.topBorder".format(mask), self.sm_top_border_cb.isChecked())
+            cmds.setAttr("{0}.bottomBorder".format(mask), self.sm_bottom_border_cb.isChecked())
+            cmds.setAttr("{0}.counterPadding".format(mask), self.sm_counter_padding_sb.value())
+
+            self.shot_mask_cb.setChecked(self.sm_enable_mask_cb.isChecked())
             self.on_log_output("Shot mask settings applied to: {0}".format(mask))
         except Exception:
             traceback.print_exc()
@@ -2120,7 +2156,10 @@ class CPPlayblastWidget(QtWidgets.QWidget):
     def apply_tool_tab_settings(self):
         try:
             CPPlayblastUtils.set_ffmpeg_path(self.tool_ffmpeg_path_le.text().strip())
-            CPPlayblastUtils.set_temp_output_dir_path(self.tool_temp_dir_le.text().strip())
+            temp_dir = self.tool_temp_dir_le.text().strip() or self.default_temp_output_dir()
+            self.tool_temp_dir_le.setText(temp_dir)
+            os.makedirs(temp_dir, exist_ok=True)
+            CPPlayblastUtils.set_temp_output_dir_path(temp_dir)
             CPPlayblastUtils.set_temp_file_format(self.tool_temp_format_cmb.currentText())
             self.on_log_output("Tool settings applied.")
         except Exception:
@@ -2146,6 +2185,10 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
         self.execute_btn.clicked.connect(self.on_execute)
         self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
+        self.sm_use_namegen_btn.clicked.connect(self.use_namegen_for_shotmask)
+        self.sm_insert_item_btn.clicked.connect(self.insert_shotmask_token)
+        self.tool_ffmpeg_browse_btn.clicked.connect(self.browse_ffmpeg_path)
+        self.tool_temp_dir_browse_btn.clicked.connect(self.browse_temp_output_dir)
         self.tool_apply_btn.clicked.connect(self.apply_tool_tab_settings)
         self._playblast.output_logged.connect(self.on_log_output)
 
@@ -2163,7 +2206,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.resolution_height_sb.setValue(height)
 
         self.tool_ffmpeg_path_le.setText(CPPlayblastUtils.get_ffmpeg_path())
-        self.tool_temp_dir_le.setText(CPPlayblastUtils.get_temp_output_dir_path())
+        temp_dir = CPPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
+        self.tool_temp_dir_le.setText(temp_dir)
         self.tool_temp_format_cmb.setCurrentText(CPPlayblastUtils.get_temp_file_format())
 
     def create_layouts(self):
@@ -2438,31 +2482,92 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         # Shot Mask tab
         shot_mask_tab = QtWidgets.QWidget()
         shot_mask_layout = QtWidgets.QFormLayout(shot_mask_tab)
+        self.sm_enable_mask_cb = QtWidgets.QCheckBox("Enable Shot Mask")
+        self.sm_enable_mask_cb.setChecked(self.shot_mask_cb.isChecked())
+        self.sm_top_border_cb = QtWidgets.QCheckBox("Top Border")
+        self.sm_top_border_cb.setChecked(True)
+        self.sm_bottom_border_cb = QtWidgets.QCheckBox("Bottom Border")
+        self.sm_bottom_border_cb.setChecked(True)
+
+        self.sm_top_left_cb = QtWidgets.QCheckBox("Show")
+        self.sm_top_center_cb = QtWidgets.QCheckBox("Show")
+        self.sm_top_right_cb = QtWidgets.QCheckBox("Show")
+        self.sm_bottom_left_cb = QtWidgets.QCheckBox("Show")
+        self.sm_bottom_center_cb = QtWidgets.QCheckBox("Show")
+        self.sm_bottom_right_cb = QtWidgets.QCheckBox("Show")
+        for cb in [self.sm_top_left_cb, self.sm_top_center_cb, self.sm_top_right_cb, self.sm_bottom_left_cb, self.sm_bottom_center_cb, self.sm_bottom_right_cb]:
+            cb.setChecked(True)
+
         self.sm_top_left_le = QtWidgets.QLineEdit()
         self.sm_top_center_le = QtWidgets.QLineEdit()
         self.sm_top_right_le = QtWidgets.QLineEdit()
         self.sm_bottom_left_le = QtWidgets.QLineEdit()
         self.sm_bottom_center_le = QtWidgets.QLineEdit()
         self.sm_bottom_right_le = QtWidgets.QLineEdit()
+
+        self.sm_common_items_cmb = QtWidgets.QComboBox()
+        self.sm_common_items_cmb.addItem("Frame Counter", "{counter}")
+        self.sm_common_items_cmb.addItem("FPS", "{fps}")
+        self.sm_common_items_cmb.addItem("Camera", "{camera}")
+        self.sm_common_items_cmb.addItem("Shot #", "{shot}")
+        self.sm_common_items_cmb.addItem("Scene", "{scene}")
+        self.sm_common_items_cmb.addItem("Date", "{date}")
+        self.sm_common_items_cmb.addItem("Username", "{username}")
+        self.sm_insert_item_btn = QtWidgets.QPushButton("Insert Item")
+
+        self.sm_counter_padding_sb = QtWidgets.QSpinBox()
+        self.sm_counter_padding_sb.setRange(1, 8)
+        self.sm_counter_padding_sb.setValue(4)
+
+        self.sm_use_namegen_btn = QtWidgets.QPushButton("Use Name Generator Preview")
         self.sm_apply_btn = QtWidgets.QPushButton("Apply Shot Mask Settings")
+
+        shot_mask_layout.addRow("", self.sm_enable_mask_cb)
+        shot_mask_layout.addRow("", self.sm_top_border_cb)
+        shot_mask_layout.addRow("", self.sm_bottom_border_cb)
         shot_mask_layout.addRow("Top Left", self.sm_top_left_le)
+        shot_mask_layout.addRow("Top Left Visible", self.sm_top_left_cb)
         shot_mask_layout.addRow("Top Center", self.sm_top_center_le)
+        shot_mask_layout.addRow("Top Center Visible", self.sm_top_center_cb)
         shot_mask_layout.addRow("Top Right", self.sm_top_right_le)
+        shot_mask_layout.addRow("Top Right Visible", self.sm_top_right_cb)
         shot_mask_layout.addRow("Bottom Left", self.sm_bottom_left_le)
+        shot_mask_layout.addRow("Bottom Left Visible", self.sm_bottom_left_cb)
         shot_mask_layout.addRow("Bottom Center", self.sm_bottom_center_le)
+        shot_mask_layout.addRow("Bottom Center Visible", self.sm_bottom_center_cb)
         shot_mask_layout.addRow("Bottom Right", self.sm_bottom_right_le)
+        shot_mask_layout.addRow("Bottom Right Visible", self.sm_bottom_right_cb)
+
+        common_item_row = QtWidgets.QHBoxLayout()
+        common_item_row.addWidget(self.sm_common_items_cmb)
+        common_item_row.addWidget(self.sm_insert_item_btn)
+        shot_mask_layout.addRow("Common Items", common_item_row)
+        shot_mask_layout.addRow("Frame Counter Padding", self.sm_counter_padding_sb)
+        shot_mask_layout.addRow("", self.sm_use_namegen_btn)
         shot_mask_layout.addRow("", self.sm_apply_btn)
 
         # Tool settings tab
         tool_settings_tab = QtWidgets.QWidget()
         tool_settings_layout = QtWidgets.QFormLayout(tool_settings_tab)
         self.tool_ffmpeg_path_le = QtWidgets.QLineEdit()
+        self.tool_ffmpeg_browse_btn = QtWidgets.QPushButton("...")
+        self.tool_ffmpeg_browse_btn.setMaximumWidth(30)
+        ffmpeg_row = QtWidgets.QHBoxLayout()
+        ffmpeg_row.addWidget(self.tool_ffmpeg_path_le)
+        ffmpeg_row.addWidget(self.tool_ffmpeg_browse_btn)
+
         self.tool_temp_dir_le = QtWidgets.QLineEdit()
+        self.tool_temp_dir_browse_btn = QtWidgets.QPushButton("...")
+        self.tool_temp_dir_browse_btn.setMaximumWidth(30)
+        temp_row = QtWidgets.QHBoxLayout()
+        temp_row.addWidget(self.tool_temp_dir_le)
+        temp_row.addWidget(self.tool_temp_dir_browse_btn)
+
         self.tool_temp_format_cmb = QtWidgets.QComboBox()
         self.tool_temp_format_cmb.addItems(["png", "jpg", "tif"])
         self.tool_apply_btn = QtWidgets.QPushButton("Apply Tool Settings")
-        tool_settings_layout.addRow("FFmpeg Path", self.tool_ffmpeg_path_le)
-        tool_settings_layout.addRow("Temp Output Dir", self.tool_temp_dir_le)
+        tool_settings_layout.addRow("FFmpeg Path", ffmpeg_row)
+        tool_settings_layout.addRow("Temp Output Dir", temp_row)
         tool_settings_layout.addRow("Temp Format", self.tool_temp_format_cmb)
         tool_settings_layout.addRow("", self.tool_apply_btn)
 

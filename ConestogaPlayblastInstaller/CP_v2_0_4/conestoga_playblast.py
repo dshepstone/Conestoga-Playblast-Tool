@@ -792,6 +792,10 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
             text = text.replace("{camera}", "{0}".format(self.camera_transform_name(camera_path)))
         if "{focal_length}" in text:
             text = text.replace("{focal_length}", "{0}".format(self.get_focal_length(camera_path)))
+        if "{fps}" in text:
+            text = text.replace("{fps}", "{0}".format(cmds.currentUnit(q=True, time=True)))
+        if "{shot}" in text:
+            text = text.replace("{shot}", "001")
         if "{username}" in text:
             text = text.replace("{username}", "{0}".format(self.get_username()))
         if "{date}" in text:
