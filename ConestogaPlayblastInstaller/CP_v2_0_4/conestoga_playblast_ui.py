@@ -2060,38 +2060,72 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.output_edit.appendPlainText(message)
 
     def on_execute(self):
-        output_dir = self.output_dir_path_le.text().strip()
-        if not output_dir:
-            output_dir = cmds.workspace(q=True, rootDirectory=True)
+        try:
+            output_dir = self.output_dir_path_le.text().strip()
+            if not output_dir:
+                output_dir = cmds.workspace(q=True, rootDirectory=True)
+            os.makedirs(output_dir, exist_ok=True)
 
-        filename = self.output_filename_le.text().strip()
-        if not filename:
-            filename = self.filenamePreviewLabel.text().strip()
+            filename = self.output_filename_le.text().strip()
+            if not filename:
+                filename = self.filenamePreviewLabel.text().strip()
 
-        width, height = self._selected_resolution()
-        self._playblast.set_resolution((width, height))
+            width, height = self._selected_resolution()
+            self._playblast.set_resolution((width, height))
 
-        start_frame, end_frame = self._selected_frame_range()
-        self._playblast.set_frame_range((start_frame, end_frame))
+            start_frame, end_frame = self._selected_frame_range()
+            self._playblast.set_frame_range((start_frame, end_frame))
 
-        container = self.encoding_container_cmb.currentText()
-        codec = self.encoding_video_codec_cmb.currentText()
-        self._playblast.set_encoding(container, codec)
+            container = self.encoding_container_cmb.currentText()
+            codec = self.encoding_video_codec_cmb.currentText()
+            self._playblast.set_encoding(container, codec)
 
-        self._playblast.set_camera(self._active_camera_override() or None)
+            self._playblast.set_camera(self._active_camera_override() or None)
 
-        self._playblast.execute(
-            output_dir=output_dir,
-            filename=filename,
-            padding=CPPlayblast.DEFAULT_PADDING,
-            overscan=self.overscan_cb.isChecked(),
-            show_ornaments=self.ornaments_cb.isChecked(),
-            show_in_viewer=self.viewer_cb.isChecked(),
-            offscreen=self.offscreen_cb.isChecked(),
-            overwrite=self.force_overwrite_cb.isChecked(),
-            camera_override=self._active_camera_override(),
-            enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
-        )
+            self._playblast.execute(
+                output_dir=output_dir,
+                filename=filename,
+                padding=CPPlayblast.DEFAULT_PADDING,
+                overscan=self.overscan_cb.isChecked(),
+                show_ornaments=self.ornaments_cb.isChecked(),
+                show_in_viewer=self.viewer_cb.isChecked(),
+                offscreen=self.offscreen_cb.isChecked(),
+                overwrite=self.force_overwrite_cb.isChecked(),
+                camera_override=self._active_camera_override(),
+                enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+            )
+        except Exception:
+            traceback.print_exc()
+            self.on_log_output("[Error] Playblast failed. See Script Editor for details.")
+
+    def apply_shot_mask_tab_settings(self):
+        try:
+            nodes = cmds.ls(type="ConestogaShotMask") or []
+            mask = nodes[0] if nodes else cmds.createNode("ConestogaShotMask")
+            attrs = [
+                ("topLeftText", self.sm_top_left_le.text()),
+                ("topCenterText", self.sm_top_center_le.text()),
+                ("topRightText", self.sm_top_right_le.text()),
+                ("bottomLeftText", self.sm_bottom_left_le.text()),
+                ("bottomCenterText", self.sm_bottom_center_le.text()),
+                ("bottomRightText", self.sm_bottom_right_le.text()),
+            ]
+            for attr, value in attrs:
+                cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+            self.on_log_output("Shot mask settings applied to: {0}".format(mask))
+        except Exception:
+            traceback.print_exc()
+            self.on_log_output("[Error] Failed to apply shot mask settings.")
+
+    def apply_tool_tab_settings(self):
+        try:
+            CPPlayblastUtils.set_ffmpeg_path(self.tool_ffmpeg_path_le.text().strip())
+            CPPlayblastUtils.set_temp_output_dir_path(self.tool_temp_dir_le.text().strip())
+            CPPlayblastUtils.set_temp_file_format(self.tool_temp_format_cmb.currentText())
+            self.on_log_output("Tool settings applied.")
+        except Exception:
+            traceback.print_exc()
+            self.on_log_output("[Error] Failed to apply tool settings.")
 
     def create_connections(self):
         self.output_dir_path_select_btn.clicked.connect(self.select_output_dir)
@@ -2111,6 +2145,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
 
         self.execute_btn.clicked.connect(self.on_execute)
+        self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
+        self.tool_apply_btn.clicked.connect(self.apply_tool_tab_settings)
         self._playblast.output_logged.connect(self.on_log_output)
 
     def load_settings(self):
@@ -2125,6 +2161,10 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         width, height = self._playblast.preset_to_resolution(self.resolution_select_cmb.currentText())
         self.resolution_width_sb.setValue(width)
         self.resolution_height_sb.setValue(height)
+
+        self.tool_ffmpeg_path_le.setText(CPPlayblastUtils.get_ffmpeg_path())
+        self.tool_temp_dir_le.setText(CPPlayblastUtils.get_temp_output_dir_path())
+        self.tool_temp_format_cmb.setCurrentText(CPPlayblastUtils.get_temp_file_format())
 
     def create_layouts(self):
         # Create output path layout with enhanced styling
@@ -2377,15 +2417,67 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         execute_layout.addWidget(self.execute_btn)
         execute_layout.addStretch()
 
-        # Main layout with all sections in a vertical flow
+        # Playblast tab content (scrollable)
+        playblast_tab_content = QtWidgets.QWidget()
+        playblast_tab_layout = QtWidgets.QVBoxLayout(playblast_tab_content)
+        playblast_tab_layout.setContentsMargins(10, 10, 10, 10)
+        playblast_tab_layout.setSpacing(10)
+        playblast_tab_layout.addWidget(output_frame)
+        playblast_tab_layout.addWidget(name_gen_frame)
+        playblast_tab_layout.addWidget(options_frame)
+        playblast_tab_layout.addLayout(execute_layout)
+        playblast_tab_layout.addWidget(logging_frame)
+        playblast_tab_layout.addStretch()
+
+        playblast_scroll = QtWidgets.QScrollArea()
+        playblast_scroll.setWidgetResizable(True)
+        playblast_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        playblast_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        playblast_scroll.setWidget(playblast_tab_content)
+
+        # Shot Mask tab
+        shot_mask_tab = QtWidgets.QWidget()
+        shot_mask_layout = QtWidgets.QFormLayout(shot_mask_tab)
+        self.sm_top_left_le = QtWidgets.QLineEdit()
+        self.sm_top_center_le = QtWidgets.QLineEdit()
+        self.sm_top_right_le = QtWidgets.QLineEdit()
+        self.sm_bottom_left_le = QtWidgets.QLineEdit()
+        self.sm_bottom_center_le = QtWidgets.QLineEdit()
+        self.sm_bottom_right_le = QtWidgets.QLineEdit()
+        self.sm_apply_btn = QtWidgets.QPushButton("Apply Shot Mask Settings")
+        shot_mask_layout.addRow("Top Left", self.sm_top_left_le)
+        shot_mask_layout.addRow("Top Center", self.sm_top_center_le)
+        shot_mask_layout.addRow("Top Right", self.sm_top_right_le)
+        shot_mask_layout.addRow("Bottom Left", self.sm_bottom_left_le)
+        shot_mask_layout.addRow("Bottom Center", self.sm_bottom_center_le)
+        shot_mask_layout.addRow("Bottom Right", self.sm_bottom_right_le)
+        shot_mask_layout.addRow("", self.sm_apply_btn)
+
+        # Tool settings tab
+        tool_settings_tab = QtWidgets.QWidget()
+        tool_settings_layout = QtWidgets.QFormLayout(tool_settings_tab)
+        self.tool_ffmpeg_path_le = QtWidgets.QLineEdit()
+        self.tool_temp_dir_le = QtWidgets.QLineEdit()
+        self.tool_temp_format_cmb = QtWidgets.QComboBox()
+        self.tool_temp_format_cmb.addItems(["png", "jpg", "tif"])
+        self.tool_apply_btn = QtWidgets.QPushButton("Apply Tool Settings")
+        tool_settings_layout.addRow("FFmpeg Path", self.tool_ffmpeg_path_le)
+        tool_settings_layout.addRow("Temp Output Dir", self.tool_temp_dir_le)
+        tool_settings_layout.addRow("Temp Format", self.tool_temp_format_cmb)
+        tool_settings_layout.addRow("", self.tool_apply_btn)
+
+        # Tab container and main layout
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(playblast_scroll, "Playblast")
+        self.tabs.addTab(shot_mask_tab, "Shot Mask")
+        self.tabs.addTab(tool_settings_tab, "Settings")
+
+        self.setMinimumWidth(980)
+
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
-        main_layout.addWidget(output_frame)
-        main_layout.addWidget(name_gen_frame)
-        main_layout.addWidget(options_frame)
-        main_layout.addLayout(execute_layout)
-        main_layout.addWidget(logging_frame)
+        main_layout.setSpacing(8)
+        main_layout.addWidget(self.tabs)
 
 
 _cp_playblast_workspace_control = None
