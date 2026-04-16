@@ -43,19 +43,57 @@ class CPPlayblastUtils(object):
     PLUG_IN_NAME = "conestoga_playblast.py"
 
     @classmethod
+    def _plugin_search_paths(cls):
+        paths = []
+
+        # Same folder as this UI script (installed CP_v2_0_4 folder).
+        paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), cls.PLUG_IN_NAME))
+
+        # Maya user scripts install root fallback.
+        scripts_root = os.path.join(cmds.internalVar(userAppDir=True), "scripts")
+        paths.append(os.path.join(scripts_root, "conestoga_playblast", "CP_v2_0_4", cls.PLUG_IN_NAME))
+
+        # De-duplicate while preserving order.
+        deduped = []
+        for path in paths:
+            normed = os.path.normpath(path)
+            if normed not in deduped:
+                deduped.append(normed)
+
+        return deduped
+
+    @classmethod
     def is_plugin_loaded(cls):
-        return cmds.pluginInfo(cls.PLUG_IN_NAME, q=True, loaded=True)
+        loaded_plugins = cmds.pluginInfo(q=True, listPlugins=True) or []
+
+        for plugin in loaded_plugins:
+            plugin_name = os.path.basename(plugin)
+            if plugin == cls.PLUG_IN_NAME or plugin_name == cls.PLUG_IN_NAME:
+                return True
+
+        return False
 
     @classmethod
     def load_plugin(cls):
-        if not cls.is_plugin_loaded():
-            try:
-                cmds.loadPlugin(cls.PLUG_IN_NAME)
-            except:
-                om.MGlobal.displayError("Failed to load CP Playblast plug-in: {0}".format(cls.PLUG_IN_NAME))
-                return
+        if cls.is_plugin_loaded():
+            return True
 
-        return True
+        load_targets = [cls.PLUG_IN_NAME]
+        load_targets.extend(cls._plugin_search_paths())
+
+        for target in load_targets:
+            try:
+                cmds.loadPlugin(target)
+                return True
+            except Exception:
+                continue
+
+        om.MGlobal.displayError(
+            "Failed to load CP Playblast plug-in: {0}. Tried: {1}".format(
+                cls.PLUG_IN_NAME, ", ".join(load_targets)
+            )
+        )
+        return False
 
     @classmethod
     def get_version(cls):
