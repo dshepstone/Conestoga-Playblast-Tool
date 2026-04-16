@@ -1948,6 +1948,184 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             font-size: 14px;
         """)
 
+
+    def refresh_cameras(self):
+        current = self.camera_select_cmb.currentText() if self.camera_select_cmb.count() else ""
+
+        self.camera_select_cmb.blockSignals(True)
+        self.camera_select_cmb.clear()
+        self.camera_select_cmb.addItem("Active")
+
+        include_defaults = not self.camera_select_hide_defaults_cb.isChecked()
+        cameras = CPPlayblastUtils.cameras_in_scene(include_defaults=include_defaults)
+        self.camera_select_cmb.addItems(cameras)
+
+        if current and self.camera_select_cmb.findText(current) >= 0:
+            self.camera_select_cmb.setCurrentText(current)
+        else:
+            self.camera_select_cmb.setCurrentIndex(0)
+
+        self.camera_select_cmb.blockSignals(False)
+
+    def refresh_encoding_codecs(self):
+        container = self.encoding_container_cmb.currentText()
+        current_codec = self.encoding_video_codec_cmb.currentText() if self.encoding_video_codec_cmb.count() else ""
+
+        self.encoding_video_codec_cmb.blockSignals(True)
+        self.encoding_video_codec_cmb.clear()
+
+        codecs = CPPlayblast.VIDEO_ENCODER_LOOKUP.get(container, [])
+        self.encoding_video_codec_cmb.addItems(codecs)
+
+        if current_codec and self.encoding_video_codec_cmb.findText(current_codec) >= 0:
+            self.encoding_video_codec_cmb.setCurrentText(current_codec)
+        elif self.encoding_video_codec_cmb.count() > 0:
+            self.encoding_video_codec_cmb.setCurrentIndex(0)
+
+        self.encoding_video_codec_cmb.blockSignals(False)
+
+    def _active_camera_override(self):
+        camera = self.camera_select_cmb.currentText()
+        if not camera or camera == "Active":
+            return ""
+        return camera
+
+    def _selected_resolution(self):
+        if self.resolution_select_cmb.currentText() == "Custom":
+            return self.resolution_width_sb.value(), self.resolution_height_sb.value()
+
+        try:
+            width, height = self._playblast.preset_to_resolution(self.resolution_select_cmb.currentText())
+            return int(width), int(height)
+        except Exception:
+            return self.resolution_width_sb.value(), self.resolution_height_sb.value()
+
+    def _selected_frame_range(self):
+        preset = self.frame_range_cmb.currentText()
+
+        if preset == "Custom":
+            return self.frame_range_start_sb.value(), self.frame_range_end_sb.value()
+
+        if preset == "Animation":
+            return int(cmds.playbackOptions(q=True, animationStartTime=True)), int(cmds.playbackOptions(q=True, animationEndTime=True))
+
+        if preset == "Playback":
+            return int(cmds.playbackOptions(q=True, minTime=True)), int(cmds.playbackOptions(q=True, maxTime=True))
+
+        if preset == "Render":
+            return int(cmds.getAttr("defaultRenderGlobals.startFrame")), int(cmds.getAttr("defaultRenderGlobals.endFrame"))
+
+        if preset == "Camera":
+            return int(cmds.playbackOptions(q=True, minTime=True)), int(cmds.playbackOptions(q=True, maxTime=True))
+
+        return self.frame_range_start_sb.value(), self.frame_range_end_sb.value()
+
+    def update_filename_preview(self):
+        filename = "A{0}_{1}_{2}_{3}_{4:02d}".format(
+            self.assignmentSpinBox.value(),
+            (self.lastnameLineEdit.text() or "LastName").strip(),
+            (self.firstnameLineEdit.text() or "FirstName").strip(),
+            self.versionTypeCombo.currentText(),
+            self.versionNumberSpinBox.value(),
+        )
+        self.filenamePreviewLabel.setText(filename + "." + self.encoding_container_cmb.currentText().lower())
+
+    def apply_generated_filename(self):
+        self.update_filename_preview()
+        self.output_filename_le.setText(self.filenamePreviewLabel.text())
+
+    def reset_name_generator(self):
+        self.assignmentSpinBox.setValue(1)
+        self.lastnameLineEdit.clear()
+        self.firstnameLineEdit.clear()
+        self.versionTypeCombo.setCurrentIndex(0)
+        self.versionNumberSpinBox.setValue(1)
+        self.update_filename_preview()
+
+    def select_output_dir(self):
+        start_dir = self.output_dir_path_le.text() or cmds.workspace(q=True, rootDirectory=True)
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Output Directory", start_dir)
+        if path:
+            self.output_dir_path_le.setText(path)
+
+    def open_output_dir(self):
+        output_dir = self.output_dir_path_le.text()
+        if output_dir and os.path.isdir(output_dir):
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(output_dir))
+
+    def clear_output_log(self):
+        self.output_edit.clear()
+
+    def on_log_output(self, message):
+        self.output_edit.appendPlainText(message)
+
+    def on_execute(self):
+        output_dir = self.output_dir_path_le.text().strip()
+        if not output_dir:
+            output_dir = cmds.workspace(q=True, rootDirectory=True)
+
+        filename = self.output_filename_le.text().strip()
+        if not filename:
+            filename = self.filenamePreviewLabel.text().strip()
+
+        width, height = self._selected_resolution()
+        self._playblast.set_resolution((width, height))
+
+        start_frame, end_frame = self._selected_frame_range()
+        self._playblast.set_frame_range((start_frame, end_frame))
+
+        container = self.encoding_container_cmb.currentText()
+        codec = self.encoding_video_codec_cmb.currentText()
+        self._playblast.set_encoding(container, codec)
+
+        self._playblast.set_camera(self._active_camera_override() or None)
+
+        self._playblast.execute(
+            output_dir=output_dir,
+            filename=filename,
+            padding=CPPlayblast.DEFAULT_PADDING,
+            overscan=self.overscan_cb.isChecked(),
+            show_ornaments=self.ornaments_cb.isChecked(),
+            show_in_viewer=self.viewer_cb.isChecked(),
+            offscreen=self.offscreen_cb.isChecked(),
+            overwrite=self.force_overwrite_cb.isChecked(),
+            camera_override=self._active_camera_override(),
+            enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+        )
+
+    def create_connections(self):
+        self.output_dir_path_select_btn.clicked.connect(self.select_output_dir)
+        self.output_dir_path_show_folder_btn.clicked.connect(self.open_output_dir)
+        self.clear_btn.clicked.connect(self.clear_output_log)
+
+        self.camera_select_hide_defaults_cb.toggled.connect(self.refresh_cameras)
+        self.encoding_container_cmb.currentIndexChanged.connect(self.refresh_encoding_codecs)
+
+        self.generateFilenameButton.clicked.connect(self.apply_generated_filename)
+        self.resetNameGeneratorButton.clicked.connect(self.reset_name_generator)
+
+        self.assignmentSpinBox.valueChanged.connect(self.update_filename_preview)
+        self.lastnameLineEdit.textChanged.connect(self.update_filename_preview)
+        self.firstnameLineEdit.textChanged.connect(self.update_filename_preview)
+        self.versionTypeCombo.currentIndexChanged.connect(self.update_filename_preview)
+        self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
+
+        self.execute_btn.clicked.connect(self.on_execute)
+        self._playblast.output_logged.connect(self.on_log_output)
+
+    def load_settings(self):
+        self.refresh_cameras()
+        self.refresh_encoding_codecs()
+        self.update_filename_preview()
+
+        start_frame, end_frame = self._selected_frame_range()
+        self.frame_range_start_sb.setValue(start_frame)
+        self.frame_range_end_sb.setValue(end_frame)
+
+        width, height = self._playblast.preset_to_resolution(self.resolution_select_cmb.currentText())
+        self.resolution_width_sb.setValue(width)
+        self.resolution_height_sb.setValue(height)
+
     def create_layouts(self):
         # Create output path layout with enhanced styling
         output_path_layout = QtWidgets.QHBoxLayout()
