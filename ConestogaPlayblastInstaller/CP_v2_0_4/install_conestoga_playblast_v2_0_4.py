@@ -65,13 +65,19 @@ def _write_launcher(scripts_dir):
     launcher_source = (
         "import os\n"
         "import sys\n"
+        "import importlib\n"
         "import maya.cmds as cmds\n\n"
         "root = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'conestoga_playblast', 'CP_v2_0_4')\n"
         "if root not in sys.path:\n"
         "    sys.path.insert(0, root)\n\n"
-        "from conestoga_playblast_ui import show_ui\n\n"
         "def launch():\n"
-        "    show_ui()\n"
+        "    module = importlib.import_module('conestoga_playblast_ui')\n"
+        "    importlib.reload(module)\n"
+        "    if hasattr(module, 'show_ui'):\n"
+        "        return module.show_ui()\n"
+        "    if hasattr(module, 'show_playblast_dialog'):\n"
+        "        return module.show_playblast_dialog()\n"
+        "    raise RuntimeError('No UI entry point found in conestoga_playblast_ui.py')\n"
     )
 
     with open(launcher_path, "w") as launcher_file:
@@ -98,12 +104,10 @@ def _add_shelf_button(icon_path):
                     cmds.deleteUI(button)
 
         shelf_command = (
-            "import os, sys, maya.cmds as cmds\n"
-            "root = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'conestoga_playblast')\n"
-            "if root not in sys.path:\n"
-            "    sys.path.insert(0, root)\n"
-            "import conestoga_playblast_latest\n"
-            "conestoga_playblast_latest.launch()"
+            "import os, runpy, maya.cmds as cmds\n"
+            "launcher = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'conestoga_playblast', 'conestoga_playblast_latest.py')\n"
+            "globals_dict = runpy.run_path(launcher)\n"
+            "globals_dict['launch']()"
         )
 
         image_name = os.path.basename(icon_path) if icon_path else "commandButton.png"
@@ -113,7 +117,7 @@ def _add_shelf_button(icon_path):
             label="Playblast",
             annotation="Launch Conestoga Playblast",
             image1=image_name,
-            imageOverlayLabel="CP",
+            imageOverlayLabel="",
             command=shelf_command,
             sourceType="python",
         )

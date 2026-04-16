@@ -2170,3 +2170,46 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         main_layout.addWidget(options_frame)
         main_layout.addLayout(execute_layout)
         main_layout.addWidget(logging_frame)
+
+
+_cp_playblast_workspace_control = None
+_cp_playblast_widget = None
+
+
+def show_ui():
+    """Show the Conestoga Playblast UI in a Maya workspace control."""
+    global _cp_playblast_workspace_control
+    global _cp_playblast_widget
+
+    if not CPPlayblastUtils.load_plugin():
+        return None
+
+    if _cp_playblast_workspace_control is None:
+        _cp_playblast_workspace_control = CPWorkspaceControl("CPPlayblastWorkspaceControl")
+
+    if _cp_playblast_widget is None:
+        _cp_playblast_widget = CPPlayblastWidget()
+
+    if _cp_playblast_workspace_control.exists():
+        _cp_playblast_workspace_control.restore(_cp_playblast_widget)
+        _cp_playblast_workspace_control.set_visible(True)
+    else:
+        _cp_playblast_workspace_control.create("Conestoga Playblast", _cp_playblast_widget)
+
+    return _cp_playblast_widget
+
+
+def close_ui():
+    """Close the Conestoga Playblast UI workspace control if it exists."""
+    global _cp_playblast_workspace_control
+    global _cp_playblast_widget
+
+    if _cp_playblast_workspace_control and _cp_playblast_workspace_control.exists():
+        cmds.deleteUI(_cp_playblast_workspace_control.name)
+
+    _cp_playblast_workspace_control = None
+    _cp_playblast_widget = None
+
+
+if __name__ == "__main__":
+    show_ui()
