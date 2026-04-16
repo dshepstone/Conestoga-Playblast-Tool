@@ -1957,6 +1957,12 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.fit_shot_mask_cb = QtWidgets.QCheckBox("Fit Shot Mask")
         self.fit_shot_mask_cb.setChecked(False)
 
+        self.nurbs_curves_cb = QtWidgets.QCheckBox("NURBS Curves")
+        self.nurbs_curves_cb.setChecked(True)
+
+        self.nurbs_surfaces_cb = QtWidgets.QCheckBox("NURBS Surfaces")
+        self.nurbs_surfaces_cb.setChecked(True)
+
         self.output_edit = QtWidgets.QPlainTextEdit()
         self.output_edit.setFocusPolicy(QtCore.Qt.NoFocus)
         self.output_edit.setReadOnly(True)
@@ -2127,6 +2133,20 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         if isinstance(focus, QtWidgets.QLineEdit):
             focus.insert(token)
 
+    def apply_quick_viewport_toggles(self):
+        visibility_data = list(self._playblast.get_visibility())
+        name_to_index = {
+            item[0]: i
+            for i, item in enumerate(CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP)
+        }
+
+        if "NURBS Curves" in name_to_index:
+            visibility_data[name_to_index["NURBS Curves"]] = self.nurbs_curves_cb.isChecked()
+        if "NURBS Surfaces" in name_to_index:
+            visibility_data[name_to_index["NURBS Surfaces"]] = self.nurbs_surfaces_cb.isChecked()
+
+        self._playblast.set_visibility(visibility_data)
+
     def on_execute(self):
         try:
             output_dir = self.output_dir_path_le.text().strip()
@@ -2149,6 +2169,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_encoding(container, codec)
 
             self._playblast.set_camera(self._active_camera_override() or None)
+            self.apply_quick_viewport_toggles()
 
             self._playblast.execute(
                 output_dir=output_dir,
@@ -2179,6 +2200,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_frame_range((start_frame, end_frame))
 
             self._playblast.set_camera(self._active_camera_override() or None)
+            self.apply_quick_viewport_toggles()
             container = self.encoding_container_cmb.currentText()
             codec = self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
@@ -2484,6 +2506,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         checkbox_grid.addWidget(self.shot_mask_cb, 1, 0)
         checkbox_grid.addWidget(self.fit_shot_mask_cb, 1, 1)
         checkbox_grid.addWidget(self.viewer_cb, 1, 2)
+        checkbox_grid.addWidget(self.nurbs_curves_cb, 2, 0)
+        checkbox_grid.addWidget(self.nurbs_surfaces_cb, 2, 1)
         
         options_checkboxes_layout = QtWidgets.QVBoxLayout(options_checkboxes_card)
         options_checkboxes_layout.setContentsMargins(10, 8, 10, 8)
