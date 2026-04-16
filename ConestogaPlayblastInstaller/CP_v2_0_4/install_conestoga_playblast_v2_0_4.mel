@@ -1,52 +1,38 @@
 // Conestoga Playblast Tool v2.0.4 - Drag & Drop Installer
 // Usage: Drag this MEL file into a Maya viewport.
 
-global proc string cstg_stripPrefix(string $value, string $prefix)
-{
-    if (`gmatch $value ($prefix + "*")`)
-    {
-        return `substring $value ((size($prefix) + 1)) (size($value))`;
-    }
-    return $value;
-}
-
 global proc installConestogaPlayblastV204()
 {
-    string $whatIs = `whatIs installConestogaPlayblastV204`;
-    string $scriptPath = `cstg_stripPrefix $whatIs "Mel procedure found in: "`;
+    string $resolvedPath = `whatIs installConestogaPlayblastV204`;
 
-    if ($scriptPath == $whatIs)
+    // "whatIs" may return either:
+    // - "Mel procedure found in: <path>"
+    // - "Script found in: <path>"
+    $resolvedPath = `substitute "Mel procedure found in: " $resolvedPath ""`;
+    $resolvedPath = `substitute "Script found in: " $resolvedPath ""`;
+
+    if (`gmatch $resolvedPath "Unknown*"`)
     {
-        warning "[Conestoga Playblast] Could not resolve installer path. Save the file locally and drag/drop again.";
+        warning "[Conestoga Playblast] Could not resolve installer path. Save the file locally and run source again.";
         return;
     }
 
-    string $sourceDir = `dirname $scriptPath`;
+    string $sourceDir = `dirname $resolvedPath`;
 
-    string $pythonCmd = "import os, shutil, traceback\\n";
-    $pythonCmd += "import maya.cmds as cmds\\n";
+    // Normalize path for Python on all platforms.
+    $sourceDir = `substitute "\\\\" $sourceDir "/"`;
+
+    string $pythonCmd = "import os, traceback\\n";
     $pythonCmd += "source_dir = r'" + $sourceDir + "'\\n";
-    $pythonCmd += "version_folder = 'CP_v2_0_4'\\n";
-    $pythonCmd += "required = ['conestoga_playblast.py','conestoga_playblast_ui.py','conestoga_playblast_presets.py']\\n";
-    $pythonCmd += "maya_app_dir = os.path.normpath(cmds.internalVar(userAppDir=True))\\n";
-    $pythonCmd += "scripts_dir = os.path.join(maya_app_dir, 'scripts')\\n";
-    $pythonCmd += "install_root = os.path.join(scripts_dir, 'conestoga_playblast', version_folder)\\n";
-    $pythonCmd += "os.makedirs(install_root, exist_ok=True)\\n";
-    $pythonCmd += "missing = [f for f in required if not os.path.exists(os.path.join(source_dir, f))]\\n";
-    $pythonCmd += "if missing:\\n";
-    $pythonCmd += "    cmds.error('[Conestoga Playblast] Missing required files: {0}'.format(', '.join(missing)))\\n";
-    $pythonCmd += "for filename in required:\\n";
-    $pythonCmd += "    shutil.copy2(os.path.join(source_dir, filename), os.path.join(install_root, filename))\\n";
-    $pythonCmd += "launcher_path = os.path.join(scripts_dir, 'conestoga_playblast', 'conestoga_playblast_latest.py')\\n";
-    $pythonCmd += "with open(launcher_path, 'w') as launcher:\\n";
-    $pythonCmd += "    launcher.write('import os, sys\\n')\\n";
-    $pythonCmd += "    launcher.write('root = os.path.dirname(os.path.abspath(__file__))\\n')\\n";
-    $pythonCmd += "    launcher.write(\"version_dir = os.path.join(root, 'CP_v2_0_4')\\n\")\\n";
-    $pythonCmd += "    launcher.write('if version_dir not in sys.path:\\n    sys.path.insert(0, version_dir)\\n')\\n";
-    $pythonCmd += "    launcher.write('from conestoga_playblast_ui import show_ui\\n')\\n";
-    $pythonCmd += "    launcher.write('def launch():\\n    show_ui()\\n')\\n";
-    $pythonCmd += "cmds.confirmDialog(title='Conestoga Playblast', message='Installation complete.\\nFiles installed to: ' + install_root, button=['OK'])\\n";
-    $pythonCmd += "print('[Conestoga Playblast] Installed v2.0.4 to: {0}'.format(install_root))\\n";
+    $pythonCmd += "installer_path = os.path.join(source_dir, 'install_conestoga_playblast_v2_0_4.py')\\n";
+    $pythonCmd += "if not os.path.exists(installer_path):\\n";
+    $pythonCmd += "    raise RuntimeError('[Conestoga Playblast] Missing installer python file: {0}'.format(installer_path))\\n";
+    $pythonCmd += "globals_dict = {'__name__': '__main__', '__file__': installer_path}\\n";
+    $pythonCmd += "with open(installer_path, 'r') as handle:\\n";
+    $pythonCmd += "    exec(compile(handle.read(), installer_path, 'exec'), globals_dict)\\n";
+    $pythonCmd += "if 'install' not in globals_dict:\\n";
+    $pythonCmd += "    raise RuntimeError('[Conestoga Playblast] install() not found in installer python file.')\\n";
+    $pythonCmd += "globals_dict['install'](source_dir=source_dir)\\n";
 
     python($pythonCmd);
 }
