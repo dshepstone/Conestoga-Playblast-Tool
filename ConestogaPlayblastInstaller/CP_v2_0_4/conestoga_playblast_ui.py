@@ -1948,6 +1948,13 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             font-size: 14px;
         """)
 
+        self.preview_btn = QtWidgets.QPushButton("Preview")
+        self.preview_btn.setMinimumHeight(int(30 * scale_value))
+        self.preview_btn.setStyleSheet("""
+            background-color: #3D7AAB;
+            font-weight: bold;
+        """)
+
 
     def refresh_cameras(self):
         current = self.camera_select_cmb.currentText() if self.camera_select_cmb.count() else ""
@@ -2128,6 +2135,40 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             traceback.print_exc()
             self.on_log_output("[Error] Playblast failed. See Script Editor for details.")
 
+    def on_preview(self):
+        try:
+            preview_dir = CPPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
+            os.makedirs(preview_dir, exist_ok=True)
+
+            preview_name = "preview_{0}".format(int(time.time()))
+            width, height = self._selected_resolution()
+            self._playblast.set_resolution((width, height))
+
+            start_frame, end_frame = self._selected_frame_range()
+            self._playblast.set_frame_range((start_frame, end_frame))
+
+            self._playblast.set_camera(self._active_camera_override() or None)
+            container = self.encoding_container_cmb.currentText()
+            codec = self.encoding_video_codec_cmb.currentText()
+            self._playblast.set_encoding(container, codec)
+
+            self._playblast.execute(
+                output_dir=preview_dir,
+                filename=preview_name,
+                padding=CPPlayblast.DEFAULT_PADDING,
+                overscan=self.overscan_cb.isChecked(),
+                show_ornaments=self.ornaments_cb.isChecked(),
+                show_in_viewer=True,
+                offscreen=self.offscreen_cb.isChecked(),
+                overwrite=True,
+                camera_override=self._active_camera_override(),
+                enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+            )
+            self.on_log_output("Preview playblast created in temp folder: {0}".format(preview_dir))
+        except Exception:
+            traceback.print_exc()
+            self.on_log_output("[Error] Preview playblast failed. See Script Editor for details.")
+
     def apply_shot_mask_tab_settings(self):
         try:
             nodes = cmds.ls(type="ConestogaShotMask") or []
@@ -2183,6 +2224,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.versionTypeCombo.currentIndexChanged.connect(self.update_filename_preview)
         self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
 
+        self.preview_btn.clicked.connect(self.on_preview)
         self.execute_btn.clicked.connect(self.on_execute)
         self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
         self.sm_use_namegen_btn.clicked.connect(self.use_namegen_for_shotmask)
@@ -2458,6 +2500,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         execute_layout = QtWidgets.QHBoxLayout()
         execute_layout.setContentsMargins(0, 10, 0, 10)
         execute_layout.addStretch()
+        execute_layout.addWidget(self.preview_btn)
+        execute_layout.addSpacing(8)
         execute_layout.addWidget(self.execute_btn)
         execute_layout.addStretch()
 
