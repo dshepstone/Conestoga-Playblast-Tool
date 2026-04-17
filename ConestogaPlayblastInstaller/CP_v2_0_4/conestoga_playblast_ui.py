@@ -2306,281 +2306,295 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.tool_temp_format_cmb.setCurrentText(CPPlayblastUtils.get_temp_file_format())
 
     def create_layouts(self):
-        # Create output path layout with enhanced styling
-        output_path_layout = QtWidgets.QHBoxLayout()
-        output_path_layout.setSpacing(2)
-        output_path_layout.addWidget(self.output_dir_path_le)
-        output_path_layout.addWidget(self.output_dir_path_select_btn)
-        output_path_layout.addWidget(self.output_dir_path_show_folder_btn)
+        """Redesigned layout.
 
-        # Create output file layout
-        output_file_layout = QtWidgets.QHBoxLayout()
-        output_file_layout.setSpacing(4)
-        output_file_layout.addWidget(self.output_filename_le)
-        output_file_layout.addWidget(self.force_overwrite_cb)
+        Structure:
+            Title bar
+            Tabs:  Output | Render | Encoding | Shot Mask | Settings
+            Footer (always visible):
+                collapsible log panel
+                action bar:  [Preview]  [Create Playblast]
+        """
+        # Shot-mask widgets are referenced by create_connections(), so they
+        # must be instantiated before the tab builders run regardless of
+        # which tab they land in.
+        self._build_shot_mask_widgets()
+        self._build_settings_widgets()
 
-        # Main output section with a cleaner, modern header
-        output_header = QtWidgets.QLabel("OUTPUT SETTINGS")
-        output_header.setStyleSheet("font-weight: bold; color: #4B94CF; font-size: 13px; padding: 5px;")
-        
-        # Create form layout for output fields with modern spacing
-        output_form = CPFormLayout()
-        output_form.setContentsMargins(8, 8, 8, 12)
-        output_form.setVerticalSpacing(10)
-        output_form.addLayoutRow(0, "Output Dir:", output_path_layout)
-        output_form.addLayoutRow(1, "Filename:", output_file_layout)
-        
-        output_layout = QtWidgets.QVBoxLayout()
-        output_layout.addWidget(output_header)
-        output_layout.addLayout(output_form)
-        
-        # Frame the output section
-        output_frame = QtWidgets.QFrame()
-        output_frame.setLayout(output_layout)
-        output_frame.setStyleSheet("QFrame { background-color: #2A2A2A; border-radius: 5px; }")
+        # --- Build each tab ------------------------------------------------
+        output_tab = self._build_output_tab()
+        render_tab = self._build_render_tab()
+        encoding_tab = self._build_encoding_tab()
+        shot_mask_tab = self._build_shot_mask_tab()
+        settings_tab = self._build_settings_tab()
 
-        # Create Name Generator section with the same styling approach
-        name_gen_header = QtWidgets.QLabel("NAME GENERATOR")
-        name_gen_header.setStyleSheet("font-weight: bold; color: #4B94CF; font-size: 13px; padding: 5px;")
-        
-        # Create grid layout for name generator fields
+        # --- Tab container -------------------------------------------------
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabPosition(QtWidgets.QTabWidget.North)
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #3D3D3D;
+                border-radius: 4px;
+                background-color: #2A2A2A;
+                top: -1px;
+            }
+            QTabBar::tab {
+                background: #2D2D30;
+                color: #CCCCCC;
+                padding: 7px 16px;
+                border: 1px solid #3D3D3D;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                margin-right: 2px;
+                min-width: 80px;
+            }
+            QTabBar::tab:selected {
+                background: #3D7AAB;
+                color: white;
+                font-weight: bold;
+            }
+            QTabBar::tab:hover:!selected {
+                background: #3A3A3E;
+            }
+        """)
+        self.tabs.addTab(output_tab, "Output")
+        self.tabs.addTab(render_tab, "Render")
+        self.tabs.addTab(encoding_tab, "Encoding")
+        self.tabs.addTab(shot_mask_tab, "Shot Mask")
+        self.tabs.addTab(settings_tab, "Settings")
+
+        # --- Footer: log + action bar (always visible) ---------------------
+        footer_frame = self._build_footer()
+
+        # --- Title bar -----------------------------------------------------
+        title_label = QtWidgets.QLabel("Conestoga Playblast")
+        title_label.setStyleSheet(
+            "font-size: 15px; font-weight: bold; color: #4B94CF; padding: 4px 2px;"
+        )
+
+        self.setMinimumWidth(760)
+
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 8, 10, 10)
+        main_layout.setSpacing(6)
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(self.tabs, stretch=1)
+        main_layout.addWidget(footer_frame)
+
+    # ------------------------------------------------------------------
+    # Helpers used by create_layouts()
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _section_header(text):
+        label = QtWidgets.QLabel(text)
+        label.setStyleSheet(
+            "font-weight: bold; color: #4B94CF; font-size: 12px; padding: 4px 2px;"
+        )
+        return label
+
+    @staticmethod
+    def _card(title_text):
+        """Returns (frame, body_layout) so callers can stack fields inside."""
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet(
+            "QFrame { background-color: #323232; border-radius: 4px; }"
+        )
+        outer = QtWidgets.QVBoxLayout(frame)
+        outer.setContentsMargins(10, 8, 10, 10)
+        outer.setSpacing(6)
+
+        if title_text:
+            title = QtWidgets.QLabel(title_text)
+            title.setStyleSheet(
+                "font-weight: bold; color: #DDDDDD; padding-left: 1px;"
+            )
+            outer.addWidget(title)
+
+        body_host = QtWidgets.QWidget()
+        body_layout = QtWidgets.QVBoxLayout(body_host)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(6)
+        outer.addWidget(body_host)
+
+        return frame, body_layout
+
+    def _wrap_in_scroll(self, inner_widget):
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(inner_widget)
+        return scroll
+
+    # ------- Output tab ------------------------------------------------
+    def _build_output_tab(self):
+        # Output dir row
+        output_path_row = QtWidgets.QHBoxLayout()
+        output_path_row.setSpacing(2)
+        output_path_row.addWidget(self.output_dir_path_le)
+        output_path_row.addWidget(self.output_dir_path_select_btn)
+        output_path_row.addWidget(self.output_dir_path_show_folder_btn)
+
+        # Filename row
+        output_file_row = QtWidgets.QHBoxLayout()
+        output_file_row.setSpacing(4)
+        output_file_row.addWidget(self.output_filename_le)
+        output_file_row.addWidget(self.force_overwrite_cb)
+
+        destination_card, destination_body = self._card("Destination")
+        destination_form = CPFormLayout()
+        destination_form.setVerticalSpacing(8)
+        destination_form.addLayoutRow(0, "Output Dir:", output_path_row)
+        destination_form.addLayoutRow(1, "Filename:", output_file_row)
+        destination_body.addLayout(destination_form)
+
+        # Name generator
+        name_gen_card, name_gen_body = self._card("Name Generator")
         name_gen_grid = QtWidgets.QGridLayout()
-        name_gen_grid.setColumnStretch(2, 1)  # Make the third column stretch
-        name_gen_grid.setVerticalSpacing(8)
-        name_gen_grid.setContentsMargins(8, 8, 8, 8)
-        
-        # Assignment field
+        name_gen_grid.setColumnStretch(2, 1)
+        name_gen_grid.setVerticalSpacing(6)
+        name_gen_grid.setHorizontalSpacing(8)
         name_gen_grid.addWidget(QtWidgets.QLabel("Assignment:"), 0, 0)
         name_gen_grid.addWidget(self.assignmentSpinBox, 0, 1)
-        
-        # Last Name field
         name_gen_grid.addWidget(QtWidgets.QLabel("Last Name:"), 1, 0)
         name_gen_grid.addWidget(self.lastnameLineEdit, 1, 1, 1, 2)
-        
-        # First Name field
         name_gen_grid.addWidget(QtWidgets.QLabel("First Name:"), 2, 0)
         name_gen_grid.addWidget(self.firstnameLineEdit, 2, 1, 1, 2)
-        
-        # Version type dropdown
         name_gen_grid.addWidget(QtWidgets.QLabel("Type:"), 3, 0)
         name_gen_grid.addWidget(self.versionTypeCombo, 3, 1)
-        
-        # Version number
         name_gen_grid.addWidget(QtWidgets.QLabel("Version:"), 4, 0)
         name_gen_grid.addWidget(self.versionNumberSpinBox, 4, 1)
-        
-        # Preview field
         name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 5, 0)
         name_gen_grid.addWidget(self.filenamePreviewLabel, 5, 1, 1, 2)
-        
-        # Generate and Reset buttons side by side with a modern layout
-        generate_btn_layout = QtWidgets.QHBoxLayout()
-        generate_btn_layout.setContentsMargins(0, 10, 0, 0)
-        generate_btn_layout.addStretch()
-        generate_btn_layout.addWidget(self.generateFilenameButton)
-        generate_btn_layout.addSpacing(8)
-        generate_btn_layout.addWidget(self.resetNameGeneratorButton)
-        generate_btn_layout.addStretch()
-        
-        name_gen_layout = QtWidgets.QVBoxLayout()
-        name_gen_layout.addWidget(name_gen_header)
-        name_gen_layout.addLayout(name_gen_grid)
-        name_gen_layout.addLayout(generate_btn_layout)
-        
-        # Frame the name generator section
-        name_gen_frame = QtWidgets.QFrame()
-        name_gen_frame.setLayout(name_gen_layout)
-        name_gen_frame.setStyleSheet("QFrame { background-color: #2A2A2A; border-radius: 5px; }")
 
-        # Options Section - Redesigned with card-based layout
-        options_header = QtWidgets.QLabel("PLAYBLAST OPTIONS")
-        options_header.setStyleSheet("font-weight: bold; color: #4B94CF; font-size: 13px; padding: 5px;")
-        
-        # Camera card 
-        camera_card = QtWidgets.QFrame()
-        camera_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        camera_title = QtWidgets.QLabel("Camera")
-        camera_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        camera_options_layout = QtWidgets.QHBoxLayout()
-        camera_options_layout.setSpacing(6)
-        camera_options_layout.addWidget(self.camera_select_cmb)
-        camera_options_layout.addWidget(self.camera_select_hide_defaults_cb)
-        camera_options_layout.addStretch()
-        
-        camera_layout = QtWidgets.QVBoxLayout(camera_card)
-        camera_layout.setContentsMargins(10, 8, 10, 8)
-        camera_layout.addWidget(camera_title)
-        camera_layout.addLayout(camera_options_layout)
+        name_gen_btns = QtWidgets.QHBoxLayout()
+        name_gen_btns.addStretch()
+        name_gen_btns.addWidget(self.generateFilenameButton)
+        name_gen_btns.addSpacing(6)
+        name_gen_btns.addWidget(self.resetNameGeneratorButton)
+        name_gen_btns.addStretch()
+
+        name_gen_body.addLayout(name_gen_grid)
+        name_gen_body.addLayout(name_gen_btns)
+
+        # Compose tab
+        tab_inner = QtWidgets.QWidget()
+        tab_layout = QtWidgets.QVBoxLayout(tab_inner)
+        tab_layout.setContentsMargins(10, 10, 10, 10)
+        tab_layout.setSpacing(10)
+        tab_layout.addWidget(destination_card)
+        tab_layout.addWidget(name_gen_card)
+        tab_layout.addStretch()
+
+        return self._wrap_in_scroll(tab_inner)
+
+    # ------- Render tab ------------------------------------------------
+    def _build_render_tab(self):
+        # Camera card
+        camera_card, camera_body = self._card("Camera")
+        camera_row = QtWidgets.QHBoxLayout()
+        camera_row.setSpacing(6)
+        camera_row.addWidget(self.camera_select_cmb)
+        camera_row.addWidget(self.camera_select_hide_defaults_cb)
+        camera_row.addStretch()
+        camera_body.addLayout(camera_row)
 
         # Resolution card
-        resolution_card = QtWidgets.QFrame()
-        resolution_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        resolution_title = QtWidgets.QLabel("Resolution")
-        resolution_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        resolution_layout = QtWidgets.QHBoxLayout()
-        resolution_layout.setSpacing(4)
-        resolution_layout.addWidget(self.resolution_select_cmb)
-        resolution_layout.addSpacing(2)
-        resolution_layout.addWidget(self.resolution_width_sb)
-        resolution_layout.addWidget(QtWidgets.QLabel("x"))
-        resolution_layout.addWidget(self.resolution_height_sb)
-        resolution_layout.addStretch()
-        
-        resolution_card_layout = QtWidgets.QVBoxLayout(resolution_card)
-        resolution_card_layout.setContentsMargins(10, 8, 10, 8)
-        resolution_card_layout.addWidget(resolution_title)
-        resolution_card_layout.addLayout(resolution_layout)
+        resolution_card, resolution_body = self._card("Resolution")
+        resolution_row = QtWidgets.QHBoxLayout()
+        resolution_row.setSpacing(4)
+        resolution_row.addWidget(self.resolution_select_cmb)
+        resolution_row.addSpacing(4)
+        resolution_row.addWidget(self.resolution_width_sb)
+        resolution_row.addWidget(QtWidgets.QLabel("x"))
+        resolution_row.addWidget(self.resolution_height_sb)
+        resolution_row.addStretch()
+        resolution_body.addLayout(resolution_row)
 
-        # Frame Range card
-        frame_range_card = QtWidgets.QFrame()
-        frame_range_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        frame_range_title = QtWidgets.QLabel("Frame Range")
-        frame_range_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        frame_range_layout = QtWidgets.QHBoxLayout()
-        frame_range_layout.setSpacing(4)
-        frame_range_layout.addWidget(self.frame_range_cmb)
-        frame_range_layout.addSpacing(2)
-        frame_range_layout.addWidget(self.frame_range_start_sb)
-        frame_range_layout.addWidget(self.frame_range_end_sb)
-        frame_range_layout.addStretch()
-        
-        frame_range_card_layout = QtWidgets.QVBoxLayout(frame_range_card)
-        frame_range_card_layout.setContentsMargins(10, 8, 10, 8)
-        frame_range_card_layout.addWidget(frame_range_title)
-        frame_range_card_layout.addLayout(frame_range_layout)
-
-        # Encoding card
-        encoding_card = QtWidgets.QFrame()
-        encoding_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        encoding_title = QtWidgets.QLabel("Encoding")
-        encoding_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        encoding_layout = QtWidgets.QHBoxLayout()
-        encoding_layout.setSpacing(2)
-        encoding_layout.addWidget(self.encoding_container_cmb)
-        encoding_layout.addWidget(self.encoding_video_codec_cmb)
-        encoding_layout.addWidget(self.encoding_video_codec_settings_btn)
-        encoding_layout.addStretch()
-        
-        encoding_card_layout = QtWidgets.QVBoxLayout(encoding_card)
-        encoding_card_layout.setContentsMargins(10, 8, 10, 8)
-        encoding_card_layout.addWidget(encoding_title)
-        encoding_card_layout.addLayout(encoding_layout)
+        # Frame range card
+        frame_range_card, frame_range_body = self._card("Frame Range")
+        frame_range_row = QtWidgets.QHBoxLayout()
+        frame_range_row.setSpacing(4)
+        frame_range_row.addWidget(self.frame_range_cmb)
+        frame_range_row.addSpacing(4)
+        frame_range_row.addWidget(self.frame_range_start_sb)
+        frame_range_row.addWidget(self.frame_range_end_sb)
+        frame_range_row.addStretch()
+        frame_range_body.addLayout(frame_range_row)
 
         # Visibility card
-        visibility_card = QtWidgets.QFrame()
-        visibility_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        visibility_title = QtWidgets.QLabel("Visibility")
-        visibility_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        visibility_layout = QtWidgets.QHBoxLayout()
-        visibility_layout.setSpacing(4)
-        visibility_layout.addWidget(self.visibility_cmb)
-        visibility_layout.addWidget(self.visibility_customize_btn)
-        visibility_layout.addStretch()
-        
-        visibility_card_layout = QtWidgets.QVBoxLayout(visibility_card)
-        visibility_card_layout.setContentsMargins(10, 8, 10, 8)
-        visibility_card_layout.addWidget(visibility_title)
-        visibility_card_layout.addLayout(visibility_layout)
+        visibility_card, visibility_body = self._card("Visibility")
+        visibility_row = QtWidgets.QHBoxLayout()
+        visibility_row.setSpacing(4)
+        visibility_row.addWidget(self.visibility_cmb)
+        visibility_row.addWidget(self.visibility_customize_btn)
+        visibility_row.addStretch()
+        visibility_body.addLayout(visibility_row)
 
-        # Checkbox options with a modern grid approach
-        options_checkboxes_card = QtWidgets.QFrame()
-        options_checkboxes_card.setStyleSheet("QFrame { background-color: #323232; border-radius: 4px; margin: 2px; }")
-        
-        checkboxes_title = QtWidgets.QLabel("Additional Options")
-        checkboxes_title.setStyleSheet("font-weight: bold; color: #CCCCCC; padding-left: 5px;")
-        
-        checkbox_grid = QtWidgets.QGridLayout()
-        checkbox_grid.addWidget(self.ornaments_cb, 0, 0)
-        checkbox_grid.addWidget(self.overscan_cb, 0, 1)
-        checkbox_grid.addWidget(self.offscreen_cb, 0, 2)
-        checkbox_grid.addWidget(self.shot_mask_cb, 1, 0)
-        checkbox_grid.addWidget(self.fit_shot_mask_cb, 1, 1)
-        checkbox_grid.addWidget(self.viewer_cb, 1, 2)
-        checkbox_grid.addWidget(self.nurbs_curves_cb, 2, 0)
-        checkbox_grid.addWidget(self.nurbs_surfaces_cb, 2, 1)
-        
-        options_checkboxes_layout = QtWidgets.QVBoxLayout(options_checkboxes_card)
-        options_checkboxes_layout.setContentsMargins(10, 8, 10, 8)
-        options_checkboxes_layout.addWidget(checkboxes_title)
-        options_checkboxes_layout.addLayout(checkbox_grid)
+        # Flags card
+        flags_card, flags_body = self._card("Options")
+        flags_grid = QtWidgets.QGridLayout()
+        flags_grid.setHorizontalSpacing(16)
+        flags_grid.setVerticalSpacing(4)
+        flags_grid.addWidget(self.ornaments_cb, 0, 0)
+        flags_grid.addWidget(self.overscan_cb, 0, 1)
+        flags_grid.addWidget(self.offscreen_cb, 0, 2)
+        flags_grid.addWidget(self.viewer_cb, 1, 0)
+        flags_grid.addWidget(self.shot_mask_cb, 1, 1)
+        flags_grid.addWidget(self.fit_shot_mask_cb, 1, 2)
+        flags_grid.addWidget(self.nurbs_curves_cb, 2, 0)
+        flags_grid.addWidget(self.nurbs_surfaces_cb, 2, 1)
+        flags_body.addLayout(flags_grid)
 
-        # Layout all option cards in a vertical flow
-        options_cards_layout = QtWidgets.QVBoxLayout()
-        options_cards_layout.setSpacing(8)
-        options_cards_layout.addWidget(camera_card)
-        options_cards_layout.addWidget(resolution_card)
-        options_cards_layout.addWidget(frame_range_card)
-        options_cards_layout.addWidget(encoding_card)
-        options_cards_layout.addWidget(visibility_card)
-        options_cards_layout.addWidget(options_checkboxes_card)
-        
-        options_layout = QtWidgets.QVBoxLayout()
-        options_layout.addWidget(options_header)
-        options_layout.addLayout(options_cards_layout)
-        
-        options_frame = QtWidgets.QFrame()
-        options_frame.setLayout(options_layout)
-        options_frame.setStyleSheet("QFrame { background-color: #2A2A2A; border-radius: 5px; }")
+        tab_inner = QtWidgets.QWidget()
+        tab_layout = QtWidgets.QVBoxLayout(tab_inner)
+        tab_layout.setContentsMargins(10, 10, 10, 10)
+        tab_layout.setSpacing(10)
+        tab_layout.addWidget(camera_card)
+        tab_layout.addWidget(resolution_card)
+        tab_layout.addWidget(frame_range_card)
+        tab_layout.addWidget(visibility_card)
+        tab_layout.addWidget(flags_card)
+        tab_layout.addStretch()
 
-        # Logging section
-        logging_header = QtWidgets.QLabel("LOGGING")
-        logging_header.setStyleSheet("font-weight: bold; color: #4B94CF; font-size: 13px; padding: 5px;")
-        
-        logging_button_layout = QtWidgets.QHBoxLayout()
-        logging_button_layout.setContentsMargins(8, 4, 8, 10)
-        logging_button_layout.addWidget(self.log_to_script_editor_cb)
-        logging_button_layout.addStretch()
-        logging_button_layout.addWidget(self.clear_btn)
-        
-        logging_layout = QtWidgets.QVBoxLayout()
-        logging_layout.addWidget(logging_header)
-        logging_layout.addWidget(self.output_edit)
-        logging_layout.addLayout(logging_button_layout)
-        
-        logging_frame = QtWidgets.QFrame()
-        logging_frame.setLayout(logging_layout)
-        logging_frame.setStyleSheet("QFrame { background-color: #2A2A2A; border-radius: 5px; }")
+        return self._wrap_in_scroll(tab_inner)
 
-        # Create Playblast Button
-        execute_layout = QtWidgets.QHBoxLayout()
-        execute_layout.setContentsMargins(0, 10, 0, 10)
-        execute_layout.addStretch()
-        execute_layout.addWidget(self.preview_btn)
-        execute_layout.addSpacing(8)
-        execute_layout.addWidget(self.execute_btn)
-        execute_layout.addStretch()
+    # ------- Encoding tab ----------------------------------------------
+    def _build_encoding_tab(self):
+        encoding_card, encoding_body = self._card("Format & Codec")
+        encoding_form = CPFormLayout()
+        encoding_form.setVerticalSpacing(8)
+        encoding_form.addWidgetRow(0, "Container:", self.encoding_container_cmb)
+        encoding_form.addWidgetRow(1, "Codec:", self.encoding_video_codec_cmb)
 
-        # Playblast tab content (scrollable)
-        playblast_tab_content = QtWidgets.QWidget()
-        playblast_tab_layout = QtWidgets.QVBoxLayout(playblast_tab_content)
-        playblast_tab_layout.setContentsMargins(10, 10, 10, 10)
-        playblast_tab_layout.setSpacing(10)
-        playblast_tab_layout.addWidget(output_frame)
-        playblast_tab_layout.addWidget(name_gen_frame)
-        playblast_tab_layout.addWidget(options_frame)
-        playblast_tab_layout.addLayout(execute_layout)
-        playblast_tab_layout.addWidget(logging_frame)
-        playblast_tab_layout.addStretch()
+        settings_row = QtWidgets.QHBoxLayout()
+        settings_row.addStretch()
+        settings_row.addWidget(self.encoding_video_codec_settings_btn)
+        encoding_body.addLayout(encoding_form)
+        encoding_body.addLayout(settings_row)
 
-        playblast_scroll = QtWidgets.QScrollArea()
-        playblast_scroll.setWidgetResizable(True)
-        playblast_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        playblast_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        playblast_scroll.setWidget(playblast_tab_content)
+        help_label = QtWidgets.QLabel(
+            "Pick a container format, then the codec you want inside it. "
+            "Use the Settings button to adjust quality and preset."
+        )
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("color: #9A9A9A; font-size: 11px; padding: 4px 0;")
 
-        # Shot Mask tab
-        shot_mask_tab = QtWidgets.QWidget()
-        shot_mask_layout = QtWidgets.QFormLayout(shot_mask_tab)
+        tab_inner = QtWidgets.QWidget()
+        tab_layout = QtWidgets.QVBoxLayout(tab_inner)
+        tab_layout.setContentsMargins(10, 10, 10, 10)
+        tab_layout.setSpacing(10)
+        tab_layout.addWidget(encoding_card)
+        tab_layout.addWidget(help_label)
+        tab_layout.addStretch()
+
+        return self._wrap_in_scroll(tab_inner)
+
+    # ------- Shot Mask tab --------------------------------------------
+    def _build_shot_mask_widgets(self):
         self.sm_enable_mask_cb = QtWidgets.QCheckBox("Enable Shot Mask")
         self.sm_enable_mask_cb.setChecked(self.shot_mask_cb.isChecked())
         self.sm_top_border_cb = QtWidgets.QCheckBox("Top Border")
@@ -2594,7 +2608,14 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.sm_bottom_left_cb = QtWidgets.QCheckBox("Show")
         self.sm_bottom_center_cb = QtWidgets.QCheckBox("Show")
         self.sm_bottom_right_cb = QtWidgets.QCheckBox("Show")
-        for cb in [self.sm_top_left_cb, self.sm_top_center_cb, self.sm_top_right_cb, self.sm_bottom_left_cb, self.sm_bottom_center_cb, self.sm_bottom_right_cb]:
+        for cb in (
+            self.sm_top_left_cb,
+            self.sm_top_center_cb,
+            self.sm_top_right_cb,
+            self.sm_bottom_left_cb,
+            self.sm_bottom_center_cb,
+            self.sm_bottom_right_cb,
+        ):
             cb.setChecked(True)
 
         self.sm_top_left_le = QtWidgets.QLineEdit()
@@ -2605,13 +2626,16 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.sm_bottom_right_le = QtWidgets.QLineEdit()
 
         self.sm_common_items_cmb = QtWidgets.QComboBox()
-        self.sm_common_items_cmb.addItem("Frame Counter", "{counter}")
-        self.sm_common_items_cmb.addItem("FPS", "{fps}")
-        self.sm_common_items_cmb.addItem("Camera", "{camera}")
-        self.sm_common_items_cmb.addItem("Shot #", "{shot}")
-        self.sm_common_items_cmb.addItem("Scene", "{scene}")
-        self.sm_common_items_cmb.addItem("Date", "{date}")
-        self.sm_common_items_cmb.addItem("Username", "{username}")
+        for label, token in (
+            ("Frame Counter", "{counter}"),
+            ("FPS", "{fps}"),
+            ("Camera", "{camera}"),
+            ("Shot #", "{shot}"),
+            ("Scene", "{scene}"),
+            ("Date", "{date}"),
+            ("Username", "{username}"),
+        ):
+            self.sm_common_items_cmb.addItem(label, token)
         self.sm_insert_item_btn = QtWidgets.QPushButton("Insert Item")
 
         self.sm_counter_padding_sb = QtWidgets.QSpinBox()
@@ -2621,67 +2645,150 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.sm_use_namegen_btn = QtWidgets.QPushButton("Use Name Generator Preview")
         self.sm_apply_btn = QtWidgets.QPushButton("Apply Shot Mask Settings")
 
-        shot_mask_layout.addRow("", self.sm_enable_mask_cb)
-        shot_mask_layout.addRow("", self.sm_top_border_cb)
-        shot_mask_layout.addRow("", self.sm_bottom_border_cb)
-        shot_mask_layout.addRow("Top Left", self.sm_top_left_le)
-        shot_mask_layout.addRow("Top Left Visible", self.sm_top_left_cb)
-        shot_mask_layout.addRow("Top Center", self.sm_top_center_le)
-        shot_mask_layout.addRow("Top Center Visible", self.sm_top_center_cb)
-        shot_mask_layout.addRow("Top Right", self.sm_top_right_le)
-        shot_mask_layout.addRow("Top Right Visible", self.sm_top_right_cb)
-        shot_mask_layout.addRow("Bottom Left", self.sm_bottom_left_le)
-        shot_mask_layout.addRow("Bottom Left Visible", self.sm_bottom_left_cb)
-        shot_mask_layout.addRow("Bottom Center", self.sm_bottom_center_le)
-        shot_mask_layout.addRow("Bottom Center Visible", self.sm_bottom_center_cb)
-        shot_mask_layout.addRow("Bottom Right", self.sm_bottom_right_le)
-        shot_mask_layout.addRow("Bottom Right Visible", self.sm_bottom_right_cb)
+    def _build_shot_mask_tab(self):
+        enable_card, enable_body = self._card("Mask")
+        flag_row = QtWidgets.QHBoxLayout()
+        flag_row.addWidget(self.sm_enable_mask_cb)
+        flag_row.addSpacing(16)
+        flag_row.addWidget(self.sm_top_border_cb)
+        flag_row.addWidget(self.sm_bottom_border_cb)
+        flag_row.addStretch()
+        enable_body.addLayout(flag_row)
 
-        common_item_row = QtWidgets.QHBoxLayout()
-        common_item_row.addWidget(self.sm_common_items_cmb)
-        common_item_row.addWidget(self.sm_insert_item_btn)
-        shot_mask_layout.addRow("Common Items", common_item_row)
-        shot_mask_layout.addRow("Frame Counter Padding", self.sm_counter_padding_sb)
-        shot_mask_layout.addRow("", self.sm_use_namegen_btn)
-        shot_mask_layout.addRow("", self.sm_apply_btn)
+        labels_card, labels_body = self._card("Labels")
+        labels_grid = QtWidgets.QGridLayout()
+        labels_grid.setHorizontalSpacing(8)
+        labels_grid.setVerticalSpacing(6)
 
-        # Tool settings tab
-        tool_settings_tab = QtWidgets.QWidget()
-        tool_settings_layout = QtWidgets.QFormLayout(tool_settings_tab)
+        row = 0
+        for name, line_edit, check_box in (
+            ("Top Left", self.sm_top_left_le, self.sm_top_left_cb),
+            ("Top Center", self.sm_top_center_le, self.sm_top_center_cb),
+            ("Top Right", self.sm_top_right_le, self.sm_top_right_cb),
+            ("Bottom Left", self.sm_bottom_left_le, self.sm_bottom_left_cb),
+            ("Bottom Center", self.sm_bottom_center_le, self.sm_bottom_center_cb),
+            ("Bottom Right", self.sm_bottom_right_le, self.sm_bottom_right_cb),
+        ):
+            labels_grid.addWidget(QtWidgets.QLabel(name + ":"), row, 0, QtCore.Qt.AlignRight)
+            labels_grid.addWidget(line_edit, row, 1)
+            labels_grid.addWidget(check_box, row, 2)
+            row += 1
+        labels_grid.setColumnStretch(1, 1)
+        labels_body.addLayout(labels_grid)
+
+        tokens_card, tokens_body = self._card("Tokens")
+        token_row = QtWidgets.QHBoxLayout()
+        token_row.addWidget(self.sm_common_items_cmb, stretch=1)
+        token_row.addWidget(self.sm_insert_item_btn)
+        tokens_body.addLayout(token_row)
+
+        counter_row = QtWidgets.QHBoxLayout()
+        counter_row.addWidget(QtWidgets.QLabel("Frame Counter Padding:"))
+        counter_row.addWidget(self.sm_counter_padding_sb)
+        counter_row.addStretch()
+        tokens_body.addLayout(counter_row)
+
+        apply_row = QtWidgets.QHBoxLayout()
+        apply_row.addStretch()
+        apply_row.addWidget(self.sm_use_namegen_btn)
+        apply_row.addSpacing(6)
+        apply_row.addWidget(self.sm_apply_btn)
+
+        tab_inner = QtWidgets.QWidget()
+        tab_layout = QtWidgets.QVBoxLayout(tab_inner)
+        tab_layout.setContentsMargins(10, 10, 10, 10)
+        tab_layout.setSpacing(10)
+        tab_layout.addWidget(enable_card)
+        tab_layout.addWidget(labels_card)
+        tab_layout.addWidget(tokens_card)
+        tab_layout.addLayout(apply_row)
+        tab_layout.addStretch()
+
+        return self._wrap_in_scroll(tab_inner)
+
+    # ------- Settings tab ---------------------------------------------
+    def _build_settings_widgets(self):
         self.tool_ffmpeg_path_le = QtWidgets.QLineEdit()
         self.tool_ffmpeg_browse_btn = QtWidgets.QPushButton("...")
         self.tool_ffmpeg_browse_btn.setMaximumWidth(30)
-        ffmpeg_row = QtWidgets.QHBoxLayout()
-        ffmpeg_row.addWidget(self.tool_ffmpeg_path_le)
-        ffmpeg_row.addWidget(self.tool_ffmpeg_browse_btn)
 
         self.tool_temp_dir_le = QtWidgets.QLineEdit()
         self.tool_temp_dir_browse_btn = QtWidgets.QPushButton("...")
         self.tool_temp_dir_browse_btn.setMaximumWidth(30)
+
+        self.tool_temp_format_cmb = QtWidgets.QComboBox()
+        self.tool_temp_format_cmb.addItems(["png", "jpg", "tif"])
+
+        self.tool_apply_btn = QtWidgets.QPushButton("Apply Tool Settings")
+
+    def _build_settings_tab(self):
+        ffmpeg_row = QtWidgets.QHBoxLayout()
+        ffmpeg_row.addWidget(self.tool_ffmpeg_path_le)
+        ffmpeg_row.addWidget(self.tool_ffmpeg_browse_btn)
+
         temp_row = QtWidgets.QHBoxLayout()
         temp_row.addWidget(self.tool_temp_dir_le)
         temp_row.addWidget(self.tool_temp_dir_browse_btn)
 
-        self.tool_temp_format_cmb = QtWidgets.QComboBox()
-        self.tool_temp_format_cmb.addItems(["png", "jpg", "tif"])
-        self.tool_apply_btn = QtWidgets.QPushButton("Apply Tool Settings")
-        tool_settings_layout.addRow("FFmpeg Path", ffmpeg_row)
-        tool_settings_layout.addRow("Temp Output Dir", temp_row)
-        tool_settings_layout.addRow("Temp Format", self.tool_temp_format_cmb)
-        tool_settings_layout.addRow("", self.tool_apply_btn)
+        paths_card, paths_body = self._card("Paths")
+        paths_form = CPFormLayout()
+        paths_form.setVerticalSpacing(8)
+        paths_form.addLayoutRow(0, "FFmpeg:", ffmpeg_row)
+        paths_form.addLayoutRow(1, "Temp Output Dir:", temp_row)
+        paths_form.addWidgetRow(2, "Temp Format:", self.tool_temp_format_cmb)
+        paths_body.addLayout(paths_form)
 
-        # Tab container and main layout
-        self.tabs = QtWidgets.QTabWidget()
-        self.tabs.addTab(playblast_scroll, "Playblast")
-        self.tabs.addTab(shot_mask_tab, "Shot Mask")
-        self.tabs.addTab(tool_settings_tab, "Settings")
+        apply_row = QtWidgets.QHBoxLayout()
+        apply_row.addStretch()
+        apply_row.addWidget(self.tool_apply_btn)
 
-        self.setMinimumWidth(980)
+        tab_inner = QtWidgets.QWidget()
+        tab_layout = QtWidgets.QVBoxLayout(tab_inner)
+        tab_layout.setContentsMargins(10, 10, 10, 10)
+        tab_layout.setSpacing(10)
+        tab_layout.addWidget(paths_card)
+        tab_layout.addLayout(apply_row)
+        tab_layout.addStretch()
 
-        main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(8)
-        main_layout.addWidget(self.tabs)
+        return self._wrap_in_scroll(tab_inner)
+
+    # ------- Footer: log + action bar ---------------------------------
+    def _build_footer(self):
+        # Log area wrapped in a collapsible group
+        log_group = CPCollapsibleGrpWidget("Output Log")
+        log_group.set_expanded(False)
+
+        log_controls = QtWidgets.QHBoxLayout()
+        log_controls.setContentsMargins(0, 0, 0, 0)
+        log_controls.addWidget(self.log_to_script_editor_cb)
+        log_controls.addStretch()
+        log_controls.addWidget(self.clear_btn)
+
+        self.output_edit.setMinimumHeight(80)
+        self.output_edit.setMaximumHeight(160)
+
+        log_group.add_widget(self.output_edit)
+        log_group.add_layout(log_controls)
+
+        # Action bar
+        action_row = QtWidgets.QHBoxLayout()
+        action_row.setContentsMargins(0, 6, 0, 0)
+        action_row.addStretch()
+        action_row.addWidget(self.preview_btn)
+        action_row.addSpacing(8)
+        action_row.addWidget(self.execute_btn)
+
+        footer_frame = QtWidgets.QFrame()
+        footer_frame.setStyleSheet(
+            "QFrame { background-color: #2A2A2A; border-radius: 5px; }"
+        )
+        footer_layout = QtWidgets.QVBoxLayout(footer_frame)
+        footer_layout.setContentsMargins(8, 6, 8, 8)
+        footer_layout.setSpacing(4)
+        footer_layout.addWidget(log_group)
+        footer_layout.addLayout(action_row)
+
+        return footer_frame
 
 
 _cp_playblast_workspace_control = None
