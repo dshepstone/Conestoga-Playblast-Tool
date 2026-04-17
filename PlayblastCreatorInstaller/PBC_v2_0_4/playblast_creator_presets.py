@@ -1,17 +1,17 @@
 ###############################################################################
 # Name:
-#   conestoga_playblast_presets.py
+#   playblast_creator_presets.py
 #
 # Author:
-#   Conestoga College
+#   Playblast Creator
 #
 # Usage:
-#   Customizable presets for Conestoga Playblast Tool
+#   Customizable presets for Playblast Creator Tool
 #
-# Copyright (C) 2025 Conestoga College. All rights reserved.
+# Copyright (C) 2025 Playblast Creator. All rights reserved.
 ###############################################################################
 
-class ConestogaPlayblastCustomPresets(object):
+class PlayblastCreatorCustomPresets(object):
 
 
     RESOLUTION_PRESETS = [
@@ -53,7 +53,7 @@ class ConestogaPlayblastCustomPresets(object):
         #
         # Format:  ("display_name", "{tag_name}"),
         #
-        ("Conestoga Projects", "{conestoga_projects}"),
+        ("Playblast Creator Projects", "{playblast_creator_projects}"),
     ]
 
     PLAYBLAST_OUTPUT_FILENAME_LOOKUP = [
@@ -72,10 +72,10 @@ class ConestogaPlayblastCustomPresets(object):
 
         PLAYBLAST_OUTPUT_PATH_LOOKUP can be used to add {tag} to context menu.
         """
-        if "{conestoga_projects}" in dir_path:
+        if "{playblast_creator_projects}" in dir_path:
             # Replace with your desired path or environment variable
-            conestoga_projects_path = "C:/ConestogaProjects"
-            dir_path = dir_path.replace("{conestoga_projects}", conestoga_projects_path)
+            playblast_creator_projects_path = "C:/Playblast CreatorProjects"
+            dir_path = dir_path.replace("{playblast_creator_projects}", playblast_creator_projects_path)
 
         return dir_path
 
@@ -99,7 +99,7 @@ class ConestogaPlayblastCustomPresets(object):
         return filename
 
 
-class ConestogaShotMaskCustomPresets(object):
+class PlayblastCreatorShotMaskCustomPresets(object):
 
 
     SHOT_MASK_LABEL_LOOKUP = [

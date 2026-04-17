@@ -1,6 +1,6 @@
 """
-Conestoga Playblast Tool - UI Module
-This module provides the user interface for the Conestoga Playblast Tool.
+Playblast Creator Tool - UI Module
+This module provides the user interface for the Playblast Creator Tool.
 """
 
 import os
@@ -12,8 +12,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.append(script_dir)
 
-import conestoga_playblast_presets as presets
-import conestoga_playblast_utils as utils
+import playblast_creator_presets as presets
+import playblast_creator_utils as utils
 
 # Try to import Qt frameworks based on Maya version
 try:
@@ -384,7 +384,7 @@ class PlayblastDialog(QtWidgets.QDialog):
                     "bottomRightText": self.bottomRightLineEdit.text()
                 }
                 
-                import conestoga_playblast
+                import playblast_creator
                 camera = self.camera_combo.currentText()
                 if camera == presets.DEFAULT_CAMERA:
                     camera = None  # Use active viewport camera
@@ -396,7 +396,7 @@ class PlayblastDialog(QtWidgets.QDialog):
     
     def create_playblast(self):
         # Get all the configuration options from UI
-        import conestoga_playblast
+        import playblast_creator
         
         output_dir = self.output_dir_field.text() or os.path.join(cmds.workspace(q=True, rootDirectory=True), "movies")
         filename = self.filename_field.text() or "{scene}_{camera}"
@@ -434,7 +434,7 @@ class PlayblastDialog(QtWidgets.QDialog):
         
         # Call the playblast function
         try:
-            result = conestoga_playblast.create_playblast(
+            result = playblast_creator.create_playblast(
                 camera=camera,
                 output_dir=output_dir,
                 filename=filename,

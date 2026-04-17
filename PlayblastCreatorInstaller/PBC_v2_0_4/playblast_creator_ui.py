@@ -1,6 +1,6 @@
 ###############################################################################
 # Name:
-#   cp_playblast_ui.py
+#   playblast_creator_ui.py
 #
 # Usage:
 #   Launch the CP Playblast UI
@@ -35,23 +35,23 @@ import maya.api.OpenMaya as om
 import maya.OpenMayaUI as omui
 
 # Note: We still use the original preset module
-from conestoga_playblast_presets import ConestogaPlayblastCustomPresets, ConestogaShotMaskCustomPresets
+from playblast_creator_presets import PlayblastCreatorCustomPresets, PlayblastCreatorShotMaskCustomPresets
 
 
-class CPPlayblastUtils(object):
+class PBCPlayblastUtils(object):
 
-    PLUG_IN_NAME = "conestoga_playblast.py"
+    PLUG_IN_NAME = "playblast_creator.py"
 
     @classmethod
     def _plugin_search_paths(cls):
         paths = []
 
-        # Same folder as this UI script (installed CP_v2_0_4 folder).
+        # Same folder as this UI script (installed PBC_v2_0_4 folder).
         paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), cls.PLUG_IN_NAME))
 
         # Maya user scripts install root fallback.
         scripts_root = os.path.join(cmds.internalVar(userAppDir=True), "scripts")
-        paths.append(os.path.join(scripts_root, "conestoga_playblast", "CP_v2_0_4", cls.PLUG_IN_NAME))
+        paths.append(os.path.join(scripts_root, "playblast_creator", "PBC_v2_0_4", cls.PLUG_IN_NAME))
 
         # De-duplicate while preserving order.
         deduped = []
@@ -97,55 +97,55 @@ class CPPlayblastUtils(object):
 
     @classmethod
     def get_version(cls):
-        return cmds.ConestogaPlayblast(v=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(v=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_ffmpeg_path(cls):
-        return cmds.ConestogaPlayblast(q=True, fp=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(q=True, fp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_ffmpeg_path(cls, path):
-        cmds.ConestogaPlayblast(e=True, fp=path)  # pylint: disable=E1101
+        cmds.PlayblastCreator(e=True, fp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_ffmpeg_env_var_set(cls):
-        return cmds.ConestogaPlayblast(fev=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(fev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_temp_output_dir_path(cls):
-        return cmds.ConestogaPlayblast(q=True, tp=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(q=True, tp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_temp_output_dir_path(cls, path):
-        cmds.ConestogaPlayblast(e=True, tp=path)  # pylint: disable=E1101
+        cmds.PlayblastCreator(e=True, tp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_temp_output_env_var_set(cls):
-        return cmds.ConestogaPlayblast(tev=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(tev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_temp_file_format(cls):
-        return cmds.ConestogaPlayblast(q=True, tf=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(q=True, tf=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_temp_file_format(cls, file_format):
-        cmds.ConestogaPlayblast(e=True, tf=file_format)  # pylint: disable=E1101
+        cmds.PlayblastCreator(e=True, tf=file_format)  # pylint: disable=E1101
 
     @classmethod
     def is_temp_format_env_set(cls):
-        return cmds.ConestogaPlayblast(tfe=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(tfe=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def get_logo_path(cls):
-        return cmds.ConestogaPlayblast(q=True, lp=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(q=True, lp=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def set_logo_path(cls, path):
-        cmds.ConestogaPlayblast(e=True, lp=path)  # pylint: disable=E1101
+        cmds.PlayblastCreator(e=True, lp=path)  # pylint: disable=E1101
 
     @classmethod
     def is_logo_env_var_set(cls):
-        return cmds.ConestogaPlayblast(lev=True)[0]  # pylint: disable=E1101
+        return cmds.PlayblastCreator(lev=True)[0]  # pylint: disable=E1101
 
     @classmethod
     def cameras_in_scene(cls, include_defaults=True, user_created_first=True):
@@ -185,12 +185,12 @@ class CPPlayblastUtils(object):
         return scale_value
 
 
-class CPCollapsibleGrpHeader(QtWidgets.QWidget):
+class PBCCollapsibleGrpHeader(QtWidgets.QWidget):
 
     clicked = QtCore.Signal()
 
     def __init__(self, text, parent=None):
-        super(CPCollapsibleGrpHeader, self).__init__(parent)
+        super(PBCCollapsibleGrpHeader, self).__init__(parent)
 
         self.setAutoFillBackground(True)
         self.set_background_color(None)
@@ -242,17 +242,17 @@ class CPCollapsibleGrpHeader(QtWidgets.QWidget):
         self.clicked.emit()  # pylint: disable=E1101
 
 
-class CPCollapsibleGrpWidget(QtWidgets.QWidget):
+class PBCCollapsibleGrpWidget(QtWidgets.QWidget):
 
     collapsed_state_changed = QtCore.Signal()
 
     def __init__(self, text, parent=None):
-        super(CPCollapsibleGrpWidget, self).__init__(parent)
+        super(PBCCollapsibleGrpWidget, self).__init__(parent)
 
         self.append_stretch_on_collapse = False
         self.stretch_appended = False
 
-        self.header_wdg = CPCollapsibleGrpHeader(text)
+        self.header_wdg = PBCCollapsibleGrpHeader(text)
         self.header_wdg.clicked.connect(self.on_header_clicked)  # pylint: disable=E1101
 
         self.body_wdg = QtWidgets.QWidget()
@@ -311,14 +311,14 @@ class CPCollapsibleGrpWidget(QtWidgets.QWidget):
         self.collapsed_state_changed.emit()  # pylint: disable=E1101
 
 
-class CPColorButton(QtWidgets.QWidget):
+class PBCColorButton(QtWidgets.QWidget):
 
     color_changed = QtCore.Signal()
 
     def __init__(self, color=(1.0, 1.0, 1.0), parent=None):
-        super(CPColorButton, self).__init__(parent)
+        super(PBCColorButton, self).__init__(parent)
 
-        self.setObjectName("CPColorButton")
+        self.setObjectName("PBCColorButton")
 
         self.create_control()
 
@@ -359,7 +359,7 @@ class CPColorButton(QtWidgets.QWidget):
             return omui.MQtUtil.fullName(long(self._color_slider_obj))  # pylint: disable=E0602
 
     def set_size(self, width, height):
-        scale_value = CPPlayblastUtils.dpi_real_scale_value()
+        scale_value = PBCPlayblastUtils.dpi_real_scale_value()
 
         self._color_slider_widget.setFixedWidth(int(width * scale_value))
         self._color_widget.setFixedHeight(int(height * scale_value))
@@ -375,7 +375,7 @@ class CPColorButton(QtWidgets.QWidget):
         self.color_changed.emit()  # pylint: disable=E1101
 
 
-class CPLineEdit(QtWidgets.QLineEdit):
+class PBCLineEdit(QtWidgets.QLineEdit):
 
     TYPE_PLAYBLAST_OUTPUT_PATH = 0
     TYPE_PLAYBLAST_OUTPUT_FILENAME = 1
@@ -404,7 +404,7 @@ class CPLineEdit(QtWidgets.QLineEdit):
     ]
 
     def __init__(self, le_type, parent=None):
-        super(CPLineEdit, self).__init__(parent)
+        super(PBCLineEdit, self).__init__(parent)
 
         self.le_type = le_type
 
@@ -421,15 +421,15 @@ class CPLineEdit(QtWidgets.QLineEdit):
         context_menu.addSeparator()
 
         lookup = []
-        if self.le_type == CPLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH:
-            lookup.extend(CPLineEdit.PLAYBLAST_OUTPUT_PATH_LOOKUP)
-            lookup.extend(ConestogaPlayblastCustomPresets.PLAYBLAST_OUTPUT_PATH_LOOKUP)
-        elif self.le_type == CPLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME:
-            lookup.extend(CPLineEdit.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
-            lookup.extend(ConestogaPlayblastCustomPresets.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
-        elif self.le_type == CPLineEdit.TYPE_SHOT_MASK_LABEL:
-            lookup.extend(CPLineEdit.SHOT_MASK_LABEL_LOOKUP)
-            lookup.extend(ConestogaShotMaskCustomPresets.SHOT_MASK_LABEL_LOOKUP)
+        if self.le_type == PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH:
+            lookup.extend(PBCLineEdit.PLAYBLAST_OUTPUT_PATH_LOOKUP)
+            lookup.extend(PlayblastCreatorCustomPresets.PLAYBLAST_OUTPUT_PATH_LOOKUP)
+        elif self.le_type == PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME:
+            lookup.extend(PBCLineEdit.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
+            lookup.extend(PlayblastCreatorCustomPresets.PLAYBLAST_OUTPUT_FILENAME_LOOKUP)
+        elif self.le_type == PBCLineEdit.TYPE_SHOT_MASK_LABEL:
+            lookup.extend(PBCLineEdit.SHOT_MASK_LABEL_LOOKUP)
+            lookup.extend(PlayblastCreatorShotMaskCustomPresets.SHOT_MASK_LABEL_LOOKUP)
 
         for item in lookup:
             action = context_menu.addAction(item[0])
@@ -442,10 +442,10 @@ class CPLineEdit(QtWidgets.QLineEdit):
         self.insert(self.sender().data())
 
 
-class CPFormLayout(QtWidgets.QGridLayout):
+class PBCFormLayout(QtWidgets.QGridLayout):
 
     def __init__(self, parent=None):
-        super(CPFormLayout, self).__init__(parent)
+        super(PBCFormLayout, self).__init__(parent)
 
         self.setContentsMargins(0, 0, 0, 8)
         self.setColumnMinimumWidth(0, 80)
@@ -460,10 +460,10 @@ class CPFormLayout(QtWidgets.QGridLayout):
         self.addLayout(layout, row, 1)
 
 
-class CPCameraSelectDialog(QtWidgets.QDialog):
+class PBCCameraSelectDialog(QtWidgets.QDialog):
 
     def __init__(self, parent):
-        super(CPCameraSelectDialog, self).__init__(parent)
+        super(PBCCameraSelectDialog, self).__init__(parent)
 
         self.setWindowTitle("Camera Select")
         self.setModal(True)
@@ -542,7 +542,7 @@ class CPCameraSelectDialog(QtWidgets.QDialog):
         if prepend:
             self.camera_list_wdg.addItems(prepend)
 
-        self.camera_list_wdg.addItems(CPPlayblastUtils.cameras_in_scene(include_defaults, user_created_first))
+        self.camera_list_wdg.addItems(PBCPlayblastUtils.cameras_in_scene(include_defaults, user_created_first))
 
         if append:
             self.camera_list_wdg.addItems(append)
@@ -563,7 +563,7 @@ class CPCameraSelectDialog(QtWidgets.QDialog):
         return selected
 
 
-class CPWorkspaceControl(object):
+class PBCWorkspaceControl(object):
 
     def __init__(self, name):
         self.name = name
@@ -618,7 +618,7 @@ class CPWorkspaceControl(object):
         return cmds.workspaceControl(self.name, q=True, collapse=True)
 
 
-class CPPlayblast(QtCore.QObject):
+class PBCPlayblast(QtCore.QObject):
 
     DEFAULT_FFMPEG_PATH = ""
 
@@ -727,21 +727,21 @@ class CPPlayblast(QtCore.QObject):
 
 
     def __init__(self):
-        super(CPPlayblast, self).__init__()
+        super(PBCPlayblast, self).__init__()
 
-        self.set_maya_logging_enabled(CPPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
+        self.set_maya_logging_enabled(PBCPlayblast.DEFAULT_MAYA_LOGGING_ENABLED)
 
         self.build_presets()
 
-        self.set_camera(CPPlayblast.DEFAULT_CAMERA)
-        self.set_resolution(CPPlayblast.DEFAULT_RESOLUTION)
-        self.set_frame_range(CPPlayblast.DEFAULT_FRAME_RANGE)
+        self.set_camera(PBCPlayblast.DEFAULT_CAMERA)
+        self.set_resolution(PBCPlayblast.DEFAULT_RESOLUTION)
+        self.set_frame_range(PBCPlayblast.DEFAULT_FRAME_RANGE)
 
-        self.set_encoding(CPPlayblast.DEFAULT_CONTAINER, CPPlayblast.DEFAULT_ENCODER)
-        self.set_h264_settings(CPPlayblast.DEFAULT_H264_QUALITY, CPPlayblast.DEFAULT_H264_PRESET)
-        self.set_image_settings(CPPlayblast.DEFAULT_IMAGE_QUALITY)
+        self.set_encoding(PBCPlayblast.DEFAULT_CONTAINER, PBCPlayblast.DEFAULT_ENCODER)
+        self.set_h264_settings(PBCPlayblast.DEFAULT_H264_QUALITY, PBCPlayblast.DEFAULT_H264_PRESET)
+        self.set_image_settings(PBCPlayblast.DEFAULT_IMAGE_QUALITY)
 
-        self.set_visibility(CPPlayblast.DEFAULT_VISIBILITY)
+        self.set_visibility(PBCPlayblast.DEFAULT_VISIBILITY)
 
         self.initialize_ffmpeg_process()
 
@@ -749,12 +749,12 @@ class CPPlayblast(QtCore.QObject):
         self.resolution_preset_names = []
         self.resolution_presets = {}
 
-        for preset in CPPlayblast.RESOLUTION_PRESETS:
+        for preset in PBCPlayblast.RESOLUTION_PRESETS:
             self.resolution_preset_names.append(preset[0])
             self.resolution_presets[preset[0]] = preset[1]
 
         try:
-            for preset in ConestogaPlayblastCustomPresets.RESOLUTION_PRESETS:
+            for preset in PlayblastCreatorCustomPresets.RESOLUTION_PRESETS:
                 self.resolution_preset_names.append(preset[0])
                 self.resolution_presets[preset[0]] = preset[1]
         except:
@@ -764,12 +764,12 @@ class CPPlayblast(QtCore.QObject):
         self.viewport_visibility_preset_names = []
         self.viewport_visibility_presets = {}
 
-        for preset in CPPlayblast.VIEWPORT_VISIBILITY_PRESETS:
+        for preset in PBCPlayblast.VIEWPORT_VISIBILITY_PRESETS:
             self.viewport_visibility_preset_names.append(preset[0])
             self.viewport_visibility_presets[preset[0]] = preset[1]
 
         try:
-            for preset in ConestogaPlayblastCustomPresets.VIEWPORT_VISIBILITY_PRESETS:
+            for preset in PlayblastCreatorCustomPresets.VIEWPORT_VISIBILITY_PRESETS:
                 self.viewport_visibility_preset_names.append(preset[0])
                 self.viewport_visibility_presets[preset[0]] = preset[1]
 
@@ -838,7 +838,7 @@ class CPPlayblast(QtCore.QObject):
             return
 
         self._frame_range_preset = None
-        if frame_range in CPPlayblast.FRAME_RANGE_PRESETS:
+        if frame_range in PBCPlayblast.FRAME_RANGE_PRESETS:
             self._frame_range_preset = frame_range
 
         self._start_frame = resolved_frame_range[0]
@@ -862,7 +862,7 @@ class CPPlayblast(QtCore.QObject):
 
         except:
             presets = []
-            for preset in CPPlayblast.FRAME_RANGE_PRESETS:
+            for preset in PBCPlayblast.FRAME_RANGE_PRESETS:
                 presets.append("'{0}'".format(preset))
             self.log_error('Invalid frame range. Expected one of (start_frame, end_frame), {0}'.format(", ".join(presets)))
 
@@ -916,7 +916,7 @@ class CPPlayblast(QtCore.QObject):
 
         preset_names = self.viewport_visibility_presets[visibility_preset_name]
         if preset_names:
-            for lookup_item in CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+            for lookup_item in PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
                 visibility_data.append(lookup_item[0] in preset_names)
 
         return visibility_data
@@ -928,7 +928,7 @@ class CPPlayblast(QtCore.QObject):
 
         viewport_visibility = []
         try:
-            for item in CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+            for item in PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
                 kwargs = {item[1]: True}
                 viewport_visibility.append(cmds.modelEditor(model_panel, q=True, **kwargs))
         except:
@@ -945,31 +945,31 @@ class CPPlayblast(QtCore.QObject):
         visibility_flags = {}
 
         data_index = 0
-        for item in CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
+        for item in PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP:
             visibility_flags[item[1]] = visibility_data[data_index]
             data_index += 1
 
         return visibility_flags
 
     def set_encoding(self, container_format, encoder):
-        if container_format not in CPPlayblast.VIDEO_ENCODER_LOOKUP.keys():
-            self.log_error("Invalid container: {0}. Expected one of {1}".format(container_format, CPPlayblast.VIDEO_ENCODER_LOOKUP.keys()))
+        if container_format not in PBCPlayblast.VIDEO_ENCODER_LOOKUP.keys():
+            self.log_error("Invalid container: {0}. Expected one of {1}".format(container_format, PBCPlayblast.VIDEO_ENCODER_LOOKUP.keys()))
             return
 
-        if encoder not in CPPlayblast.VIDEO_ENCODER_LOOKUP[container_format]:
-            self.log_error("Invalid encoder: {0}. Expected one of {1}".format(encoder, CPPlayblast.VIDEO_ENCODER_LOOKUP[container_format]))
+        if encoder not in PBCPlayblast.VIDEO_ENCODER_LOOKUP[container_format]:
+            self.log_error("Invalid encoder: {0}. Expected one of {1}".format(encoder, PBCPlayblast.VIDEO_ENCODER_LOOKUP[container_format]))
             return
 
         self._container_format = container_format
         self._encoder = encoder
 
     def set_h264_settings(self, quality, preset):
-        if not quality in CPPlayblast.H264_QUALITIES.keys():
-            self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, CPPlayblast.H264_QUALITIES.keys()))
+        if not quality in PBCPlayblast.H264_QUALITIES.keys():
+            self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, PBCPlayblast.H264_QUALITIES.keys()))
             return
 
-        if not preset in CPPlayblast.H264_PRESETS:
-            self.log_error("Invalid h264 preset: {0}. Expected one of {1}".format(preset, CPPlayblast.H264_PRESETS))
+        if not preset in PBCPlayblast.H264_PRESETS:
+            self.log_error("Invalid h264 preset: {0}. Expected one of {1}".format(preset, PBCPlayblast.H264_PRESETS))
             return
 
         self._h264_quality = quality
@@ -994,12 +994,12 @@ class CPPlayblast(QtCore.QObject):
 
     def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False):
 
-        ffmpeg_path = CPPlayblastUtils.get_ffmpeg_path()
+        ffmpeg_path = PBCPlayblastUtils.get_ffmpeg_path()
         if self.requires_ffmpeg() and not self.validate_ffmpeg(ffmpeg_path):
             self.log_error("ffmpeg executable is not configured. See script editor for details.")
             return
 
-        temp_file_format = CPPlayblastUtils.get_temp_file_format()
+        temp_file_format = PBCPlayblastUtils.get_temp_file_format()
         temp_file_is_movie = temp_file_format == "movie"
 
         if temp_file_is_movie:
@@ -1041,7 +1041,7 @@ class CPPlayblast(QtCore.QObject):
         filename = self.resolve_output_filename(filename, camera)
 
         if padding <= 0:
-            padding = CPPlayblast.DEFAULT_PADDING
+            padding = PBCPlayblast.DEFAULT_PADDING
 
         if self.requires_ffmpeg():
             output_path = os.path.normpath(os.path.join(output_dir, "{0}.{1}".format(filename, self._container_format)))
@@ -1076,17 +1076,17 @@ class CPPlayblast(QtCore.QObject):
         start_frame, end_frame = self.get_start_end_frame()
 
         if enable_camera_frame_range:
-            if cmds.attributeQuery(CPPlayblast.CAMERA_PLAYBLAST_START_ATTR, node=camera, exists=True) and cmds.attributeQuery(CPPlayblast.CAMERA_PLAYBLAST_END_ATTR, node=camera, exists=True):
+            if cmds.attributeQuery(PBCPlayblast.CAMERA_PLAYBLAST_START_ATTR, node=camera, exists=True) and cmds.attributeQuery(PBCPlayblast.CAMERA_PLAYBLAST_END_ATTR, node=camera, exists=True):
                 try:
-                    start_frame = int(cmds.getAttr("{0}.{1}".format(camera, CPPlayblast.CAMERA_PLAYBLAST_START_ATTR)))
-                    end_frame = int(cmds.getAttr("{0}.{1}".format(camera, CPPlayblast.CAMERA_PLAYBLAST_END_ATTR)))
+                    start_frame = int(cmds.getAttr("{0}.{1}".format(camera, PBCPlayblast.CAMERA_PLAYBLAST_START_ATTR)))
+                    end_frame = int(cmds.getAttr("{0}.{1}".format(camera, PBCPlayblast.CAMERA_PLAYBLAST_END_ATTR)))
 
                     self.log_output("Camera frame range enabled for '{0}' camera: ({1}, {2})\n".format(camera, start_frame, end_frame))
                 except:
                     self.log_warning("Camera frame range disabled. Invalid attribute type(s) on '{0}' camera (expected integer or float). Defaulting to Playback range.\n".format(camera))
 
             else:
-                self.log_warning("Camera frame range disabled. Attributes '{0}' and '{1}' do not exist on '{2}' camera. Defaulting to Playback range.\n".format(CPPlayblast.CAMERA_PLAYBLAST_START_ATTR, CPPlayblast.CAMERA_PLAYBLAST_END_ATTR, camera))
+                self.log_warning("Camera frame range disabled. Attributes '{0}' and '{1}' do not exist on '{2}' camera. Defaulting to Playback range.\n".format(PBCPlayblast.CAMERA_PLAYBLAST_START_ATTR, PBCPlayblast.CAMERA_PLAYBLAST_END_ATTR, camera))
 
         if start_frame > end_frame:
             self.log_error("Invalid frame range. The start frame ({0}) is greater than the end frame ({1}).".format(start_frame, end_frame))
@@ -1224,7 +1224,7 @@ class CPPlayblast(QtCore.QObject):
         self._ffmpeg_process.readyReadStandardError.connect(self.process_ffmpeg_output)
 
     def get_platform_h264_video_codec(self):
-        codec = CPPlayblast.PLATFORM_H264_CODEC_LOOKUP.get(sys.platform, "libx264")
+        codec = PBCPlayblast.PLATFORM_H264_CODEC_LOOKUP.get(sys.platform, "libx264")
         self.log_output("Selected H.264 codec for platform '{0}': {1}".format(sys.platform, codec))
         return codec
 
@@ -1268,7 +1268,7 @@ class CPPlayblast(QtCore.QObject):
         if audio_file_path:
             audio_offset = self.get_audio_offset_in_sec(start_frame, audio_frame_offset, framerate)
 
-        crf = CPPlayblast.H264_QUALITIES[self._h264_quality]
+        crf = PBCPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
         video_codec_args = self.get_h264_video_codec_arguments(crf, preset)
 
@@ -1294,7 +1294,7 @@ class CPPlayblast(QtCore.QObject):
         self.log_output("Starting h264 transcoding...")
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
-        crf = CPPlayblast.H264_QUALITIES[self._h264_quality]
+        crf = PBCPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
         video_codec_args = self.get_h264_video_codec_arguments(crf, preset)
 
@@ -1358,12 +1358,12 @@ class CPPlayblast(QtCore.QObject):
         return (start_frame - audio_frame_offset) / frame_rate
 
     def resolve_output_directory_path(self, dir_path):
-        dir_path = ConestogaPlayblastCustomPresets.parse_playblast_output_dir_path(dir_path)
+        dir_path = PlayblastCreatorCustomPresets.parse_playblast_output_dir_path(dir_path)
 
         if "{project}" in dir_path:
             dir_path = dir_path.replace("{project}", self.get_project_dir_path())
         if "{temp}" in dir_path:
-            temp_dir_path = CPPlayblastUtils.get_temp_output_dir_path()
+            temp_dir_path = PBCPlayblastUtils.get_temp_output_dir_path()
 
             if not temp_dir_path:
                 self.log_warning("The {temp} directory path is not set")
@@ -1373,7 +1373,7 @@ class CPPlayblast(QtCore.QObject):
         return dir_path
 
     def resolve_output_filename(self, filename, camera):
-        filename = ConestogaPlayblastCustomPresets.parse_playblast_output_filename(filename)
+        filename = PlayblastCreatorCustomPresets.parse_playblast_output_filename(filename)
 
         if "{scene}" in filename:
             filename = filename.replace("{scene}", self.get_scene_name())
@@ -1463,13 +1463,13 @@ class CPPlayblast(QtCore.QObject):
 
     def log_error(self, text):
         if self._log_to_maya:
-            om.MGlobal.displayError("[CP Playblast] {0}".format(text))
+            om.MGlobal.displayError("[Playblast Creator] {0}".format(text))
 
         self.output_logged.emit("[ERROR] {0}".format(text))  # pylint: disable=E1101
 
     def log_warning(self, text):
         if self._log_to_maya:
-            om.MGlobal.displayWarning("[CP Playblast] {0}".format(text))
+            om.MGlobal.displayWarning("[Playblast Creator] {0}".format(text))
 
         self.output_logged.emit("[WARNING] {0}".format(text))  # pylint: disable=E1101
 
@@ -1480,7 +1480,7 @@ class CPPlayblast(QtCore.QObject):
         self.output_logged.emit(text)  # pylint: disable=E1101
 
 
-class CPPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
+class PBCEncoderSettingsDialog(QtWidgets.QDialog):
 
     ENCODER_PAGES = {
         "h264": 0,
@@ -1496,7 +1496,7 @@ class CPPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
 
 
     def __init__(self, parent):
-        super(CPPlayblastEncoderSettingsDialog, self).__init__(parent)
+        super(PBCEncoderSettingsDialog, self).__init__(parent)
 
         self.setWindowTitle("Encoder Settings")
         self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
@@ -1551,10 +1551,10 @@ class CPPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
     def create_widgets(self):
         # h264
         self.h264_quality_combo = QtWidgets.QComboBox()
-        self.h264_quality_combo.addItems(CPPlayblastEncoderSettingsDialog.H264_QUALITIES)
+        self.h264_quality_combo.addItems(PBCEncoderSettingsDialog.H264_QUALITIES)
 
         self.h264_preset_combo = QtWidgets.QComboBox()
-        self.h264_preset_combo.addItems(CPPlayblast.H264_PRESETS)
+        self.h264_preset_combo.addItems(PBCPlayblast.H264_PRESETS)
 
         h264_layout = QtWidgets.QFormLayout()
         h264_layout.addRow("Quality:", self.h264_quality_combo)
@@ -1600,10 +1600,10 @@ class CPPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         self.cancel_btn.clicked.connect(self.close)
 
     def set_page(self, page):
-        if not page in CPPlayblastEncoderSettingsDialog.ENCODER_PAGES:
+        if not page in PBCEncoderSettingsDialog.ENCODER_PAGES:
             return False
 
-        self.settings_stacked_wdg.setCurrentIndex(CPPlayblastEncoderSettingsDialog.ENCODER_PAGES[page])
+        self.settings_stacked_wdg.setCurrentIndex(PBCEncoderSettingsDialog.ENCODER_PAGES[page])
         return True
 
     def set_h264_settings(self, quality, preset):
@@ -1625,10 +1625,10 @@ class CPPlayblastEncoderSettingsDialog(QtWidgets.QDialog):
         }
 
 
-class CPPlayblastVisibilityDialog(QtWidgets.QDialog):
+class PBCVisibilityDialog(QtWidgets.QDialog):
 
     def __init__(self, parent):
-        super(CPPlayblastVisibilityDialog, self).__init__(parent)
+        super(PBCVisibilityDialog, self).__init__(parent)
 
         self.setWindowTitle("Customize Visibility")
         self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
@@ -1639,8 +1639,8 @@ class CPPlayblastVisibilityDialog(QtWidgets.QDialog):
         index = 0
         self.visibility_checkboxes = []
 
-        for i in range(len(CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP)):
-            checkbox = QtWidgets.QCheckBox(CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP[i][0])
+        for i in range(len(PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP)):
+            checkbox = QtWidgets.QCheckBox(PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP[i][0])
 
             visibility_layout.addWidget(checkbox, index / 3, index % 3)
             self.visibility_checkboxes.append(checkbox)
@@ -1716,49 +1716,49 @@ class CPPlayblastVisibilityDialog(QtWidgets.QDialog):
             self.visibility_checkboxes[i].setChecked(data[i])
 
 
-class CPPlayblastWidget(QtWidgets.QWidget):
+class PBCPlayblastWidget(QtWidgets.QWidget):
 
-    OPT_VAR_OUTPUT_DIR = "cstgPlayblastOutputDir"
-    OPT_VAR_OUTPUT_FILENAME = "cstgPlayblastOutputFilename"
-    OPT_VAR_FORCE_OVERWRITE = "cstgPlayblastForceOverwrite"
+    OPT_VAR_OUTPUT_DIR = "pbcrPlayblastOutputDir"
+    OPT_VAR_OUTPUT_FILENAME = "pbcrPlayblastOutputFilename"
+    OPT_VAR_FORCE_OVERWRITE = "pbcrPlayblastForceOverwrite"
 
-    OPT_VAR_CAMERA = "cstgPlayblastCamera"
-    OPT_VAR_HIDE_DEFAULT_CAMERAS = "cstgPlayblastHideDefaultCameras"
+    OPT_VAR_CAMERA = "pbcrPlayblastCamera"
+    OPT_VAR_HIDE_DEFAULT_CAMERAS = "pbcrPlayblastHideDefaultCameras"
 
-    OPT_VAR_RESOLUTION_PRESET = "cstgPlayblastResolutionPreset"
-    OPT_VAR_RESOLUTION_WIDTH = "cstgPlayblastResolutionWidth"
-    OPT_VAR_RESOLUTION_HEIGHT = "cstgPlayblastResolutionHeight"
+    OPT_VAR_RESOLUTION_PRESET = "pbcrPlayblastResolutionPreset"
+    OPT_VAR_RESOLUTION_WIDTH = "pbcrPlayblastResolutionWidth"
+    OPT_VAR_RESOLUTION_HEIGHT = "pbcrPlayblastResolutionHeight"
 
-    OPT_VAR_FRAME_RANGE_PRESET = "cstgPlayblastFrameRangePreset"
-    OPT_VAR_FRAME_RANGE_START = "cstgPlayblastFrameRangeStart"
-    OPT_VAR_FRAME_RANGE_END = "cstgPlayblastFrameRangeEnd"
+    OPT_VAR_FRAME_RANGE_PRESET = "pbcrPlayblastFrameRangePreset"
+    OPT_VAR_FRAME_RANGE_START = "pbcrPlayblastFrameRangeStart"
+    OPT_VAR_FRAME_RANGE_END = "pbcrPlayblastFrameRangeEnd"
 
-    OPT_VAR_ENCODING_CONTAINER = "cstgPlayblastEncodingContainer"
-    OPT_VAR_ENCODING_VIDEO_CODEC = "cstgPlayblastEncodingVideoCodec"
+    OPT_VAR_ENCODING_CONTAINER = "pbcrPlayblastEncodingContainer"
+    OPT_VAR_ENCODING_VIDEO_CODEC = "pbcrPlayblastEncodingVideoCodec"
 
-    OPT_VAR_H264_QUALITY = "cstgPlayblastH264Quality"
-    OPT_VAR_H264_PRESET = "cstgPlayblastH264Preset"
+    OPT_VAR_H264_QUALITY = "pbcrPlayblastH264Quality"
+    OPT_VAR_H264_PRESET = "pbcrPlayblastH264Preset"
 
-    OPT_VAR_IMAGE_QUALITY = "cstgPlayblastImageQuality"
+    OPT_VAR_IMAGE_QUALITY = "pbcrPlayblastImageQuality"
 
-    OPT_VAR_VISIBILITY_PRESET = "cstgPlayblastVisibilityPreset"
-    OPT_VAR_VISIBILITY_DATA = "cstgPlayblastVisibilityData"
+    OPT_VAR_VISIBILITY_PRESET = "pbcrPlayblastVisibilityPreset"
+    OPT_VAR_VISIBILITY_DATA = "pbcrPlayblastVisibilityData"
 
-    OPT_VAR_OVERSCAN = "cstgPlayblastOverscan"
-    OPT_VAR_ORNAMENTS = "cstgPlayblastOrnaments"
-    OPT_VAR_OFFSCREEN = "cstgPlayblastOffscreen"
-    OPT_VAR_SHOT_MASK = "cstgPlayblastShotMask"
-    OPT_VAR_FIT_SHOT_MASK = "cstgPlayblastFitShotMask"
-    OPT_VAR_VIEWER = "cstgPlayblastViewer"
+    OPT_VAR_OVERSCAN = "pbcrPlayblastOverscan"
+    OPT_VAR_ORNAMENTS = "pbcrPlayblastOrnaments"
+    OPT_VAR_OFFSCREEN = "pbcrPlayblastOffscreen"
+    OPT_VAR_SHOT_MASK = "pbcrPlayblastShotMask"
+    OPT_VAR_FIT_SHOT_MASK = "pbcrPlayblastFitShotMask"
+    OPT_VAR_VIEWER = "pbcrPlayblastViewer"
 
-    OPT_VAR_LOG_TO_SCRIPT_EDITOR = "cstgPlayblastLogToSE"
+    OPT_VAR_LOG_TO_SCRIPT_EDITOR = "pbcrPlayblastLogToSE"
 
     # Name generator option vars
-    OPT_VAR_ASSIGNMENT_NUMBER = "cstgPlayblastAssignmentNumber"
-    OPT_VAR_LAST_NAME = "cstgPlayblastLastName"
-    OPT_VAR_FIRST_NAME = "cstgPlayblastFirstName"
-    OPT_VAR_VERSION_TYPE = "cstgPlayblastVersionType"
-    OPT_VAR_VERSION_NUMBER = "cstgPlayblastVersionNumber"
+    OPT_VAR_ASSIGNMENT_NUMBER = "pbcrPlayblastAssignmentNumber"
+    OPT_VAR_LAST_NAME = "pbcrPlayblastLastName"
+    OPT_VAR_FIRST_NAME = "pbcrPlayblastFirstName"
+    OPT_VAR_VERSION_TYPE = "pbcrPlayblastVersionType"
+    OPT_VAR_VERSION_NUMBER = "pbcrPlayblastVersionNumber"
 
     CONTAINER_PRESETS = [
         "mov",
@@ -1770,9 +1770,9 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
 
     def __init__(self, parent=None):
-        super(CPPlayblastWidget, self).__init__(parent)
+        super(PBCPlayblastWidget, self).__init__(parent)
 
-        self._playblast = CPPlayblast()
+        self._playblast = PBCPlayblast()
 
         self._settings_dialog = None
         self._encoder_settings_dialog = None
@@ -1785,7 +1785,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.load_settings()
 
     def create_widgets(self):
-        scale_value = CPPlayblastUtils.dpi_real_scale_value()
+        scale_value = PBCPlayblastUtils.dpi_real_scale_value()
 
         button_height = int(19 * scale_value)
         icon_button_width = int(24 * scale_value)
@@ -1826,7 +1826,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
                 width: 14px;
                 height: 14px;
             }
-            CPCollapsibleGrpWidget {
+            PBCCollapsibleGrpWidget {
                 border: 1px solid #555555;
                 border-radius: 3px;
                 margin-top: 2px;
@@ -1836,7 +1836,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             }
         """)
 
-        self.output_dir_path_le = CPLineEdit(CPLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
+        self.output_dir_path_le = PBCLineEdit(PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
         self.output_dir_path_le.setPlaceholderText("{project}/movies")
 
         self.output_dir_path_select_btn = QtWidgets.QPushButton("...")
@@ -1847,7 +1847,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.output_dir_path_show_folder_btn.setFixedSize(icon_button_width, icon_button_height)
         self.output_dir_path_show_folder_btn.setToolTip("Show in Folder")
 
-        self.output_filename_le = CPLineEdit(CPLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
+        self.output_filename_le = PBCLineEdit(PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
         self.output_filename_le.setPlaceholderText("{scene}_{timestamp}")
         self.output_filename_le.setMaximumWidth(int(200 * scale_value))
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
@@ -1884,7 +1884,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.resolution_select_cmb.setMinimumWidth(combo_box_min_width)
         self.resolution_select_cmb.addItems(self._playblast.resolution_preset_names)
         self.resolution_select_cmb.addItem("Custom")
-        self.resolution_select_cmb.setCurrentText(CPPlayblast.DEFAULT_RESOLUTION)
+        self.resolution_select_cmb.setCurrentText(PBCPlayblast.DEFAULT_RESOLUTION)
 
         self.resolution_width_sb = QtWidgets.QSpinBox()
         self.resolution_width_sb.setButtonSymbols(QtWidgets.QSpinBox.NoButtons)
@@ -1904,9 +1904,9 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
         self.frame_range_cmb = QtWidgets.QComboBox()
         self.frame_range_cmb.setMinimumWidth(combo_box_min_width)
-        self.frame_range_cmb.addItems(CPPlayblast.FRAME_RANGE_PRESETS)
+        self.frame_range_cmb.addItems(PBCPlayblast.FRAME_RANGE_PRESETS)
         self.frame_range_cmb.addItem("Custom")
-        self.frame_range_cmb.setCurrentText(CPPlayblast.DEFAULT_FRAME_RANGE)
+        self.frame_range_cmb.setCurrentText(PBCPlayblast.DEFAULT_FRAME_RANGE)
 
         self.frame_range_start_sb = QtWidgets.QSpinBox()
         self.frame_range_start_sb.setButtonSymbols(QtWidgets.QSpinBox.NoButtons)
@@ -1922,8 +1922,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
         self.encoding_container_cmb = QtWidgets.QComboBox()
         self.encoding_container_cmb.setMinimumWidth(combo_box_min_width)
-        self.encoding_container_cmb.addItems(CPPlayblastWidget.CONTAINER_PRESETS)
-        self.encoding_container_cmb.setCurrentText(CPPlayblast.DEFAULT_CONTAINER)
+        self.encoding_container_cmb.addItems(PBCPlayblastWidget.CONTAINER_PRESETS)
+        self.encoding_container_cmb.setCurrentText(PBCPlayblast.DEFAULT_CONTAINER)
 
         self.encoding_video_codec_cmb = QtWidgets.QComboBox()
         self.encoding_video_codec_cmb.setMinimumWidth(combo_box_min_width)
@@ -1934,7 +1934,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.visibility_cmb.setMinimumWidth(combo_box_min_width)
         self.visibility_cmb.addItems(self._playblast.viewport_visibility_preset_names)
         self.visibility_cmb.addItem("Custom")
-        self.visibility_cmb.setCurrentText(CPPlayblast.DEFAULT_VISIBILITY)
+        self.visibility_cmb.setCurrentText(PBCPlayblast.DEFAULT_VISIBILITY)
 
         self.visibility_customize_btn = QtWidgets.QPushButton("Customize...")
         self.visibility_customize_btn.setFixedHeight(button_height)
@@ -2001,7 +2001,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.camera_select_cmb.addItem("Active")
 
         include_defaults = not self.camera_select_hide_defaults_cb.isChecked()
-        cameras = CPPlayblastUtils.cameras_in_scene(include_defaults=include_defaults)
+        cameras = PBCPlayblastUtils.cameras_in_scene(include_defaults=include_defaults)
         self.camera_select_cmb.addItems(cameras)
 
         if current and self.camera_select_cmb.findText(current) >= 0:
@@ -2018,7 +2018,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.encoding_video_codec_cmb.blockSignals(True)
         self.encoding_video_codec_cmb.clear()
 
-        codecs = CPPlayblast.VIDEO_ENCODER_LOOKUP.get(container, [])
+        codecs = PBCPlayblast.VIDEO_ENCODER_LOOKUP.get(container, [])
         self.encoding_video_codec_cmb.addItems(codecs)
 
         if current_codec and self.encoding_video_codec_cmb.findText(current_codec) >= 0:
@@ -2137,7 +2137,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         visibility_data = list(self._playblast.get_visibility())
         name_to_index = {
             item[0]: i
-            for i, item in enumerate(CPPlayblast.VIEWPORT_VISIBILITY_LOOKUP)
+            for i, item in enumerate(PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP)
         }
 
         if "NURBS Curves" in name_to_index:
@@ -2174,7 +2174,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             self._playblast.execute(
                 output_dir=output_dir,
                 filename=filename,
-                padding=CPPlayblast.DEFAULT_PADDING,
+                padding=PBCPlayblast.DEFAULT_PADDING,
                 overscan=self.overscan_cb.isChecked(),
                 show_ornaments=self.ornaments_cb.isChecked(),
                 show_in_viewer=self.viewer_cb.isChecked(),
@@ -2189,7 +2189,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
     def on_preview(self):
         try:
-            preview_dir = CPPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
+            preview_dir = PBCPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
             os.makedirs(preview_dir, exist_ok=True)
 
             preview_name = "preview_{0}".format(int(time.time()))
@@ -2208,7 +2208,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
             self._playblast.execute(
                 output_dir=preview_dir,
                 filename=preview_name,
-                padding=CPPlayblast.DEFAULT_PADDING,
+                padding=PBCPlayblast.DEFAULT_PADDING,
                 overscan=self.overscan_cb.isChecked(),
                 show_ornaments=self.ornaments_cb.isChecked(),
                 show_in_viewer=True,
@@ -2224,8 +2224,8 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
     def apply_shot_mask_tab_settings(self):
         try:
-            nodes = cmds.ls(type="ConestogaShotMask") or []
-            mask = nodes[0] if nodes else cmds.createNode("ConestogaShotMask")
+            nodes = cmds.ls(type="PlayblastCreatorShotMask") or []
+            mask = nodes[0] if nodes else cmds.createNode("PlayblastCreatorShotMask")
             attrs = [
                 ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
                 ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
@@ -2249,12 +2249,12 @@ class CPPlayblastWidget(QtWidgets.QWidget):
 
     def apply_tool_tab_settings(self):
         try:
-            CPPlayblastUtils.set_ffmpeg_path(self.tool_ffmpeg_path_le.text().strip())
+            PBCPlayblastUtils.set_ffmpeg_path(self.tool_ffmpeg_path_le.text().strip())
             temp_dir = self.tool_temp_dir_le.text().strip() or self.default_temp_output_dir()
             self.tool_temp_dir_le.setText(temp_dir)
             os.makedirs(temp_dir, exist_ok=True)
-            CPPlayblastUtils.set_temp_output_dir_path(temp_dir)
-            CPPlayblastUtils.set_temp_file_format(self.tool_temp_format_cmb.currentText())
+            PBCPlayblastUtils.set_temp_output_dir_path(temp_dir)
+            PBCPlayblastUtils.set_temp_file_format(self.tool_temp_format_cmb.currentText())
             self.on_log_output("Tool settings applied.")
         except Exception:
             traceback.print_exc()
@@ -2300,10 +2300,10 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         self.resolution_width_sb.setValue(width)
         self.resolution_height_sb.setValue(height)
 
-        self.tool_ffmpeg_path_le.setText(CPPlayblastUtils.get_ffmpeg_path())
-        temp_dir = CPPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
+        self.tool_ffmpeg_path_le.setText(PBCPlayblastUtils.get_ffmpeg_path())
+        temp_dir = PBCPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
         self.tool_temp_dir_le.setText(temp_dir)
-        self.tool_temp_format_cmb.setCurrentText(CPPlayblastUtils.get_temp_file_format())
+        self.tool_temp_format_cmb.setCurrentText(PBCPlayblastUtils.get_temp_file_format())
 
     def create_layouts(self):
         """Redesigned layout.
@@ -2369,7 +2369,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         footer_frame = self._build_footer()
 
         # --- Title bar -----------------------------------------------------
-        title_label = QtWidgets.QLabel("Conestoga Playblast")
+        title_label = QtWidgets.QLabel("Playblast Creator")
         title_label.setStyleSheet(
             "font-size: 15px; font-weight: bold; color: #4B94CF; padding: 4px 2px;"
         )
@@ -2445,7 +2445,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         output_file_row.addWidget(self.force_overwrite_cb)
 
         destination_card, destination_body = self._card("Destination")
-        destination_form = CPFormLayout()
+        destination_form = PBCFormLayout()
         destination_form.setVerticalSpacing(8)
         destination_form.addLayoutRow(0, "Output Dir:", output_path_row)
         destination_form.addLayoutRow(1, "Filename:", output_file_row)
@@ -2565,7 +2565,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
     # ------- Encoding tab ----------------------------------------------
     def _build_encoding_tab(self):
         encoding_card, encoding_body = self._card("Format & Codec")
-        encoding_form = CPFormLayout()
+        encoding_form = PBCFormLayout()
         encoding_form.setVerticalSpacing(8)
         encoding_form.addWidgetRow(0, "Container:", self.encoding_container_cmb)
         encoding_form.addWidgetRow(1, "Codec:", self.encoding_video_codec_cmb)
@@ -2731,7 +2731,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         temp_row.addWidget(self.tool_temp_dir_browse_btn)
 
         paths_card, paths_body = self._card("Paths")
-        paths_form = CPFormLayout()
+        paths_form = PBCFormLayout()
         paths_form.setVerticalSpacing(8)
         paths_form.addLayoutRow(0, "FFmpeg:", ffmpeg_row)
         paths_form.addLayoutRow(1, "Temp Output Dir:", temp_row)
@@ -2755,7 +2755,7 @@ class CPPlayblastWidget(QtWidgets.QWidget):
     # ------- Footer: log + action bar ---------------------------------
     def _build_footer(self):
         # Log area wrapped in a collapsible group
-        log_group = CPCollapsibleGrpWidget("Output Log")
+        log_group = PBCCollapsibleGrpWidget("Output Log")
         log_group.set_expanded(False)
 
         log_controls = QtWidgets.QHBoxLayout()
@@ -2791,43 +2791,43 @@ class CPPlayblastWidget(QtWidgets.QWidget):
         return footer_frame
 
 
-_cp_playblast_workspace_control = None
-_cp_playblast_widget = None
+_pbc_playblast_workspace_control = None
+_pbc_playblast_widget = None
 
 
 def show_ui():
-    """Show the Conestoga Playblast UI in a Maya workspace control."""
-    global _cp_playblast_workspace_control
-    global _cp_playblast_widget
+    """Show the Playblast Creator UI in a Maya workspace control."""
+    global _pbc_playblast_workspace_control
+    global _pbc_playblast_widget
 
-    if not CPPlayblastUtils.load_plugin():
+    if not PBCPlayblastUtils.load_plugin():
         return None
 
-    if _cp_playblast_workspace_control is None:
-        _cp_playblast_workspace_control = CPWorkspaceControl("CPPlayblastWorkspaceControl")
+    if _pbc_playblast_workspace_control is None:
+        _pbc_playblast_workspace_control = PBCWorkspaceControl("PBCWorkspaceControl")
 
-    if _cp_playblast_widget is None:
-        _cp_playblast_widget = CPPlayblastWidget()
+    if _pbc_playblast_widget is None:
+        _pbc_playblast_widget = PBCPlayblastWidget()
 
-    if _cp_playblast_workspace_control.exists():
-        _cp_playblast_workspace_control.restore(_cp_playblast_widget)
-        _cp_playblast_workspace_control.set_visible(True)
+    if _pbc_playblast_workspace_control.exists():
+        _pbc_playblast_workspace_control.restore(_pbc_playblast_widget)
+        _pbc_playblast_workspace_control.set_visible(True)
     else:
-        _cp_playblast_workspace_control.create("Conestoga Playblast", _cp_playblast_widget)
+        _pbc_playblast_workspace_control.create("Playblast Creator", _pbc_playblast_widget)
 
-    return _cp_playblast_widget
+    return _pbc_playblast_widget
 
 
 def close_ui():
-    """Close the Conestoga Playblast UI workspace control if it exists."""
-    global _cp_playblast_workspace_control
-    global _cp_playblast_widget
+    """Close the Playblast Creator UI workspace control if it exists."""
+    global _pbc_playblast_workspace_control
+    global _pbc_playblast_widget
 
-    if _cp_playblast_workspace_control and _cp_playblast_workspace_control.exists():
-        cmds.deleteUI(_cp_playblast_workspace_control.name)
+    if _pbc_playblast_workspace_control and _pbc_playblast_workspace_control.exists():
+        cmds.deleteUI(_pbc_playblast_workspace_control.name)
 
-    _cp_playblast_workspace_control = None
-    _cp_playblast_widget = None
+    _pbc_playblast_workspace_control = None
+    _pbc_playblast_widget = None
 
 
 if __name__ == "__main__":

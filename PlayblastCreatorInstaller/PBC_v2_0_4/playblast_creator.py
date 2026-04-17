@@ -1,14 +1,14 @@
 ###############################################################################
 # Name:
-#   conestoga_playblast.py
+#   playblast_creator.py
 #
 # Author:
-#   Conestoga College
+#   Playblast Creator
 #
 # Usage:
 #   Load as a plugin in Maya
 #
-# Copyright (C) 2025 Conestoga College. All rights reserved.
+# Copyright (C) 2025 Playblast Creator. All rights reserved.
 ###############################################################################
 
 import datetime
@@ -23,28 +23,28 @@ import maya.api.OpenMayaUI as omui
 
 import maya.cmds as cmds
 
-from conestoga_playblast_presets import ConestogaShotMaskCustomPresets
+from playblast_creator_presets import PlayblastCreatorShotMaskCustomPresets
 
 
 def maya_useNewAPI():
     pass
 
 
-class ConestogaPlayblastCmd(om.MPxCommand):
+class PlayblastCreatorCmd(om.MPxCommand):
 
-    COMMAND_NAME = "ConestogaPlayblast"
+    COMMAND_NAME = "PlayblastCreator"
 
     PLUG_IN_VERSION = "1.0.1"
 
-    FFMPEG_PATH_ENV_VAR = "CONESTOGA_PLAYBLAST_FFMPEG"
-    TEMP_OUTPUT_DIR_ENV_VAR = "CONESTOGA_PLAYBLAST_TEMP_OUTPUT_DIR"
-    TEMP_FILE_FORMAT_ENV_VAR = "CONESTOGA_PLAYBLAST_TEMP_FILE_FORMAT"
-    LOGO_PATH_ENV_VAR = "CONESTOGA_PLAYBLAST_LOGO"
+    FFMPEG_PATH_ENV_VAR = "PLAYBLAST_CREATOR_FFMPEG"
+    TEMP_OUTPUT_DIR_ENV_VAR = "PLAYBLAST_CREATOR_TEMP_OUTPUT_DIR"
+    TEMP_FILE_FORMAT_ENV_VAR = "PLAYBLAST_CREATOR_TEMP_FILE_FORMAT"
+    LOGO_PATH_ENV_VAR = "PLAYBLAST_CREATOR_LOGO"
 
-    FFMPEG_PATH_OPTION_VAR = "cstgPlayblastFFmpegPath"
-    TEMP_OUTPUT_DIR_OPTION_VAR = "cstgPlayblastTempOutputPath"
-    TEMP_FILE_FORMAT_OPTION_VAR = "cstgPlayblastTempFileFormat"
-    LOGO_PATH_OPTION_VAR = "cstgShotMaskLogoPath"
+    FFMPEG_PATH_OPTION_VAR = "pbcrPlayblastFFmpegPath"
+    TEMP_OUTPUT_DIR_OPTION_VAR = "pbcrPlayblastTempOutputPath"
+    TEMP_FILE_FORMAT_OPTION_VAR = "pbcrPlayblastTempFileFormat"
+    LOGO_PATH_OPTION_VAR = "pbcrShotMaskLogoPath"
 
     FFMPEG_PATH_FLAG = ["-fp", "-ffmpegPath", om.MSyntax.kString]
     FFMPEG_ENV_VAR_FLAG = ["-fev", "-ffmpegEnvVar"]
@@ -71,7 +71,7 @@ class ConestogaPlayblastCmd(om.MPxCommand):
     def __init__(self):
         """
         """
-        super(ConestogaPlayblastCmd, self).__init__()
+        super(PlayblastCreatorCmd, self).__init__()
 
         self.undoable = False
 
@@ -89,35 +89,35 @@ class ConestogaPlayblastCmd(om.MPxCommand):
         self.edit = arg_db.isEdit
         self.query = arg_db.isQuery
 
-        self.ffmpeg_path = arg_db.isFlagSet(ConestogaPlayblastCmd.FFMPEG_PATH_FLAG[0])
+        self.ffmpeg_path = arg_db.isFlagSet(PlayblastCreatorCmd.FFMPEG_PATH_FLAG[0])
         if self.ffmpeg_path:
             if self.edit:
-                self.str_values.append(arg_db.flagArgumentString(ConestogaPlayblastCmd.FFMPEG_PATH_FLAG[0], 0))
+                self.str_values.append(arg_db.flagArgumentString(PlayblastCreatorCmd.FFMPEG_PATH_FLAG[0], 0))
 
-        self.ffmpeg_env_var = arg_db.isFlagSet(ConestogaPlayblastCmd.FFMPEG_ENV_VAR_FLAG[0])
+        self.ffmpeg_env_var = arg_db.isFlagSet(PlayblastCreatorCmd.FFMPEG_ENV_VAR_FLAG[0])
 
-        self.temp_output_dir_path = arg_db.isFlagSet(ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_FLAG[0])
+        self.temp_output_dir_path = arg_db.isFlagSet(PlayblastCreatorCmd.TEMP_OUTPUT_DIR_FLAG[0])
         if self.temp_output_dir_path:
             if self.edit:
-                self.str_values.append(arg_db.flagArgumentString(ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_FLAG[0], 0))
+                self.str_values.append(arg_db.flagArgumentString(PlayblastCreatorCmd.TEMP_OUTPUT_DIR_FLAG[0], 0))
 
-        self.temp_output_env_var = arg_db.isFlagSet(ConestogaPlayblastCmd.TEMP_OUTPUT_ENV_VAR_FLAG[0])
+        self.temp_output_env_var = arg_db.isFlagSet(PlayblastCreatorCmd.TEMP_OUTPUT_ENV_VAR_FLAG[0])
 
-        self.temp_file_format = arg_db.isFlagSet(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_FLAG[0])
+        self.temp_file_format = arg_db.isFlagSet(PlayblastCreatorCmd.TEMP_FILE_FORMAT_FLAG[0])
         if self.temp_file_format:
             if self.edit:
-                self.str_values.append(arg_db.flagArgumentString(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_FLAG[0], 0))
+                self.str_values.append(arg_db.flagArgumentString(PlayblastCreatorCmd.TEMP_FILE_FORMAT_FLAG[0], 0))
 
-        self.temp_file_format_env_var = arg_db.isFlagSet(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_ENV_VAR_FLAG[0])
+        self.temp_file_format_env_var = arg_db.isFlagSet(PlayblastCreatorCmd.TEMP_FILE_FORMAT_ENV_VAR_FLAG[0])
 
-        self.logo_path = arg_db.isFlagSet(ConestogaPlayblastCmd.LOGO_PATH_FLAG[0])
+        self.logo_path = arg_db.isFlagSet(PlayblastCreatorCmd.LOGO_PATH_FLAG[0])
         if self.logo_path:
             if self.edit:
-                self.str_values.append(arg_db.flagArgumentString(ConestogaPlayblastCmd.LOGO_PATH_FLAG[0], 0))
+                self.str_values.append(arg_db.flagArgumentString(PlayblastCreatorCmd.LOGO_PATH_FLAG[0], 0))
 
-        self.logo_path_env_var = arg_db.isFlagSet(ConestogaPlayblastCmd.LOGO_PATH_ENV_VAR_FLAG[0])
+        self.logo_path_env_var = arg_db.isFlagSet(PlayblastCreatorCmd.LOGO_PATH_ENV_VAR_FLAG[0])
 
-        self.version = arg_db.isFlagSet(ConestogaPlayblastCmd.VERSION_FLAG[0])
+        self.version = arg_db.isFlagSet(PlayblastCreatorCmd.VERSION_FLAG[0])
 
         self.redoIt()
 
@@ -171,70 +171,70 @@ class ConestogaPlayblastCmd(om.MPxCommand):
     def get_ffmpeg_path(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.resolve_env_var(ConestogaPlayblastCmd.FFMPEG_PATH_ENV_VAR, ConestogaPlayblastCmd.FFMPEG_PATH_OPTION_VAR))
+        self.setResult(PlayblastCreatorCmd.resolve_env_var(PlayblastCreatorCmd.FFMPEG_PATH_ENV_VAR, PlayblastCreatorCmd.FFMPEG_PATH_OPTION_VAR))
 
     def set_ffmpeg_path(self):
         """
         """
-        ConestogaPlayblastCmd.set_opt_var_str(ConestogaPlayblastCmd.FFMPEG_PATH_OPTION_VAR, self.str_values[0])
+        PlayblastCreatorCmd.set_opt_var_str(PlayblastCreatorCmd.FFMPEG_PATH_OPTION_VAR, self.str_values[0])
 
     def is_ffmpeg_env_var_set(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.is_env_var_set(ConestogaPlayblastCmd.FFMPEG_PATH_ENV_VAR))
+        self.setResult(PlayblastCreatorCmd.is_env_var_set(PlayblastCreatorCmd.FFMPEG_PATH_ENV_VAR))
 
     def get_temp_output_dir_path(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.resolve_env_var(ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_ENV_VAR, ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_OPTION_VAR))
+        self.setResult(PlayblastCreatorCmd.resolve_env_var(PlayblastCreatorCmd.TEMP_OUTPUT_DIR_ENV_VAR, PlayblastCreatorCmd.TEMP_OUTPUT_DIR_OPTION_VAR))
 
     def set_temp_output_dir_path(self):
         """
         """
-        ConestogaPlayblastCmd.set_opt_var_str(ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_OPTION_VAR, self.str_values[0])
+        PlayblastCreatorCmd.set_opt_var_str(PlayblastCreatorCmd.TEMP_OUTPUT_DIR_OPTION_VAR, self.str_values[0])
 
     def is_temp_output_env_var_set(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.is_env_var_set(ConestogaPlayblastCmd.TEMP_OUTPUT_DIR_ENV_VAR))
+        self.setResult(PlayblastCreatorCmd.is_env_var_set(PlayblastCreatorCmd.TEMP_OUTPUT_DIR_ENV_VAR))
 
     def get_temp_file_format(self):
         """
         """
-        temp_file_format = ConestogaPlayblastCmd.resolve_env_var(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_ENV_VAR, ConestogaPlayblastCmd.TEMP_FILE_FORMAT_OPTION_VAR)
+        temp_file_format = PlayblastCreatorCmd.resolve_env_var(PlayblastCreatorCmd.TEMP_FILE_FORMAT_ENV_VAR, PlayblastCreatorCmd.TEMP_FILE_FORMAT_OPTION_VAR)
 
-        if temp_file_format not in ConestogaPlayblastCmd.TEMP_FILE_FORMATS:
+        if temp_file_format not in PlayblastCreatorCmd.TEMP_FILE_FORMATS:
             temp_file_format = "png"
 
         self.setResult(temp_file_format)
 
     def set_temp_file_format(self):
-        if self.str_values[0] not in ConestogaPlayblastCmd.TEMP_FILE_FORMATS:
-            ConestogaPlayblastCmd.log_error("Invalid temp file format. Expected one of: {0}".format(ConestogaPlayblastCmd.TEMP_FILE_FORMATS))
+        if self.str_values[0] not in PlayblastCreatorCmd.TEMP_FILE_FORMATS:
+            PlayblastCreatorCmd.log_error("Invalid temp file format. Expected one of: {0}".format(PlayblastCreatorCmd.TEMP_FILE_FORMATS))
             return
 
-        ConestogaPlayblastCmd.set_opt_var_str(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_OPTION_VAR, self.str_values[0])
+        PlayblastCreatorCmd.set_opt_var_str(PlayblastCreatorCmd.TEMP_FILE_FORMAT_OPTION_VAR, self.str_values[0])
 
     def is_temp_file_format_env_var_set(self):
-        self.setResult(ConestogaPlayblastCmd.is_env_var_set(ConestogaPlayblastCmd.TEMP_FILE_FORMAT_ENV_VAR))
+        self.setResult(PlayblastCreatorCmd.is_env_var_set(PlayblastCreatorCmd.TEMP_FILE_FORMAT_ENV_VAR))
 
     def get_logo_path(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.resolve_env_var(ConestogaPlayblastCmd.LOGO_PATH_ENV_VAR, ConestogaPlayblastCmd.LOGO_PATH_OPTION_VAR))
+        self.setResult(PlayblastCreatorCmd.resolve_env_var(PlayblastCreatorCmd.LOGO_PATH_ENV_VAR, PlayblastCreatorCmd.LOGO_PATH_OPTION_VAR))
 
     def set_logo_path(self):
         """
         """
-        ConestogaPlayblastCmd.set_opt_var_str(ConestogaPlayblastCmd.LOGO_PATH_OPTION_VAR, self.str_values[0])
+        PlayblastCreatorCmd.set_opt_var_str(PlayblastCreatorCmd.LOGO_PATH_OPTION_VAR, self.str_values[0])
 
     def is_logo_path_env_var_set(self):
         """
         """
-        self.setResult(ConestogaPlayblastCmd.is_env_var_set(ConestogaPlayblastCmd.LOGO_PATH_ENV_VAR))
+        self.setResult(PlayblastCreatorCmd.is_env_var_set(PlayblastCreatorCmd.LOGO_PATH_ENV_VAR))
 
     def get_version(self):
-        self.setResult(ConestogaPlayblastCmd.PLUG_IN_VERSION)
+        self.setResult(PlayblastCreatorCmd.PLUG_IN_VERSION)
 
     @classmethod
     def is_env_var_set(cls, name):
@@ -268,13 +268,13 @@ class ConestogaPlayblastCmd(om.MPxCommand):
 
     @classmethod
     def log_error(cls, msg):
-        om.MGlobal.displayError("[ConestogaPlayblast] {0}".format(msg))
+        om.MGlobal.displayError("[PlayblastCreator] {0}".format(msg))
 
     @classmethod
     def creator(cls):
         """
         """
-        return ConestogaPlayblastCmd()
+        return PlayblastCreatorCmd()
 
     @classmethod
     def create_syntax(cls):
@@ -298,14 +298,14 @@ class ConestogaPlayblastCmd(om.MPxCommand):
         return syntax
 
 
-class ConestogaShotMaskLocator(omui.MPxLocatorNode):
+class PlayblastCreatorShotMaskLocator(omui.MPxLocatorNode):
     """
     """
 
-    NAME = "ConestogaShotMask"
+    NAME = "PlayblastCreatorShotMask"
     TYPE_ID = om.MTypeId(0x00123456)  # Replace with your unique ID
-    DRAW_DB_CLASSIFICATION = "drawdb/geometry/conestogashotmask"
-    DRAW_REGISTRANT_ID = "ConestogaShotMaskLocator"
+    DRAW_DB_CLASSIFICATION = "drawdb/geometry/playblast_creatorshotmask"
+    DRAW_REGISTRANT_ID = "PlayblastCreatorShotMaskLocator"
 
     TEXT_ATTRS = ["topLeftText", "tlt", "topCenterText", "tct", "topRightText", "trt",
                   "bottomLeftText", "blt", "bottomCenterText", "bct", "bottomRightText", "brt"]
@@ -313,7 +313,7 @@ class ConestogaShotMaskLocator(omui.MPxLocatorNode):
     def __init__(self):
         """
         """
-        super(ConestogaShotMaskLocator, self).__init__()
+        super(PlayblastCreatorShotMaskLocator, self).__init__()
 
     def postConstructor(self):
         """
@@ -333,7 +333,7 @@ class ConestogaShotMaskLocator(omui.MPxLocatorNode):
     def creator(cls):
         """
         """
-        return ConestogaShotMaskLocator()
+        return PlayblastCreatorShotMaskLocator()
 
     @classmethod
     def initialize(cls):
@@ -346,82 +346,82 @@ class ConestogaShotMaskLocator(omui.MPxLocatorNode):
         obj = stringData.create("")
         camera_name = typed_attr.create("camera", "cam", om.MFnData.kString, obj)
         cls.update_attr_properties(typed_attr)
-        ConestogaShotMaskLocator.addAttribute(camera_name)
+        PlayblastCreatorShotMaskLocator.addAttribute(camera_name)
 
         for i in range(0, len(cls.TEXT_ATTRS), 2):
             obj = stringData.create("Position {0}".format(str(i / 2 + 1).zfill(2)))
             position = typed_attr.create(cls.TEXT_ATTRS[i], cls.TEXT_ATTRS[i + 1], om.MFnData.kString, obj)
             cls.update_attr_properties(typed_attr)
-            ConestogaShotMaskLocator.addAttribute(position)
+            PlayblastCreatorShotMaskLocator.addAttribute(position)
 
         text_padding = numeric_attr.create("textPadding", "tp", om.MFnNumericData.kShort, 10)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0)
         numeric_attr.setMax(50)
-        ConestogaShotMaskLocator.addAttribute(text_padding)
+        PlayblastCreatorShotMaskLocator.addAttribute(text_padding)
 
         obj = stringData.create("Consolas")
         font_name = typed_attr.create("fontName", "fn", om.MFnData.kString, obj)
         cls.update_attr_properties(typed_attr)
-        ConestogaShotMaskLocator.addAttribute(font_name)
+        PlayblastCreatorShotMaskLocator.addAttribute(font_name)
 
         font_color = numeric_attr.createColor("fontColor", "fc")
         cls.update_attr_properties(numeric_attr)
         numeric_attr.default = (1.0, 1.0, 1.0)
-        ConestogaShotMaskLocator.addAttribute(font_color)
+        PlayblastCreatorShotMaskLocator.addAttribute(font_color)
 
         font_alpha = numeric_attr.create("fontAlpha", "fa", om.MFnNumericData.kFloat, 1.0)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0.0)
         numeric_attr.setMax(1.0)
-        ConestogaShotMaskLocator.addAttribute(font_alpha)
+        PlayblastCreatorShotMaskLocator.addAttribute(font_alpha)
 
         font_scale = numeric_attr.create("fontScale", "fs", om.MFnNumericData.kFloat, 1.0)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0.1)
         numeric_attr.setMax(2.0)
-        ConestogaShotMaskLocator.addAttribute(font_scale)
+        PlayblastCreatorShotMaskLocator.addAttribute(font_scale)
 
         top_border = numeric_attr.create("topBorder", "tbd", om.MFnNumericData.kBoolean, True)
         cls.update_attr_properties(numeric_attr)
-        ConestogaShotMaskLocator.addAttribute(top_border)
+        PlayblastCreatorShotMaskLocator.addAttribute(top_border)
 
         bottom_border = numeric_attr.create("bottomBorder", "bbd", om.MFnNumericData.kBoolean, True)
         cls.update_attr_properties(numeric_attr)
-        ConestogaShotMaskLocator.addAttribute(bottom_border)
+        PlayblastCreatorShotMaskLocator.addAttribute(bottom_border)
 
         border_color = numeric_attr.createColor("borderColor", "bc")
         cls.update_attr_properties(numeric_attr)
         numeric_attr.default = (0.0, 0.0, 0.0)
-        ConestogaShotMaskLocator.addAttribute(border_color)
+        PlayblastCreatorShotMaskLocator.addAttribute(border_color)
 
         border_alpha = numeric_attr.create("borderAlpha", "ba", om.MFnNumericData.kFloat, 1.0)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0.0)
         numeric_attr.setMax(1.0)
-        ConestogaShotMaskLocator.addAttribute(border_alpha)
+        PlayblastCreatorShotMaskLocator.addAttribute(border_alpha)
 
         border_scale = numeric_attr.create("borderScale", "bs", om.MFnNumericData.kFloat, 1.0)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0.5)
         numeric_attr.setMax(5.0)
-        ConestogaShotMaskLocator.addAttribute(border_scale)
+        PlayblastCreatorShotMaskLocator.addAttribute(border_scale)
 
         border_aspect_ratio_enabled = numeric_attr.create("aspectRatioBorders", "arb", om.MFnNumericData.kBoolean, False)
         cls.update_attr_properties(numeric_attr)
-        ConestogaShotMaskLocator.addAttribute(border_aspect_ratio_enabled)
+        PlayblastCreatorShotMaskLocator.addAttribute(border_aspect_ratio_enabled)
 
         border_aspect_ratio = numeric_attr.create("borderAspectRatio", "bar", om.MFnNumericData.kFloat, 2.35)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(0.1)
         numeric_attr.setMax(10.0)
-        ConestogaShotMaskLocator.addAttribute(border_aspect_ratio)
+        PlayblastCreatorShotMaskLocator.addAttribute(border_aspect_ratio)
 
         counter_padding = numeric_attr.create("counterPadding", "cpd", om.MFnNumericData.kShort, 4)
         cls.update_attr_properties(numeric_attr)
         numeric_attr.setMin(1)
         numeric_attr.setMax(6)
-        ConestogaShotMaskLocator.addAttribute(counter_padding)
+        PlayblastCreatorShotMaskLocator.addAttribute(counter_padding)
 
     @classmethod
     def update_attr_properties(cls, attr):
@@ -431,14 +431,14 @@ class ConestogaShotMaskLocator(omui.MPxLocatorNode):
             attr.keyable = True
 
 
-class ConestogaShotMaskData(om.MUserData):
+class PlayblastCreatorShotMaskData(om.MUserData):
     """
     """
 
     def __init__(self):
         """
         """
-        super(ConestogaShotMaskData, self).__init__(False)  # don't delete after draw
+        super(PlayblastCreatorShotMaskData, self).__init__(False)  # don't delete after draw
 
         self.parsed_fields = []
 
@@ -460,16 +460,16 @@ class ConestogaShotMaskData(om.MUserData):
         self.mask_height = 0
 
 
-class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
+class PlayblastCreatorShotMaskDrawOverride(omr.MPxDrawOverride):
     """
     """
 
-    NAME = "conestogashotmask_draw_override"
+    NAME = "playblast_creatorshotmask_draw_override"
 
     def __init__(self, obj):
         """
         """
-        super(ConestogaShotMaskDrawOverride, self).__init__(obj, ConestogaShotMaskDrawOverride.draw)
+        super(PlayblastCreatorShotMaskDrawOverride, self).__init__(obj, PlayblastCreatorShotMaskDrawOverride.draw)
 
     def supportedDrawAPIs(self):
         """
@@ -485,8 +485,8 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
         """
         """
         data = old_data
-        if not isinstance(data, ConestogaShotMaskData):
-            data = ConestogaShotMaskData()
+        if not isinstance(data, PlayblastCreatorShotMaskData):
+            data = PlayblastCreatorShotMaskData()
 
         # --- Shot mask attribute values
         dag_fn = om.MFnDagNode(obj_path)
@@ -523,8 +523,8 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
         data.bottom_border = dag_fn.findPlug("bottomBorder", False).asBool()
 
         data.parsed_fields = []
-        for i in range(0, len(ConestogaShotMaskLocator.TEXT_ATTRS), 2):
-            parsed_text = self.parse_text(dag_fn.findPlug(ConestogaShotMaskLocator.TEXT_ATTRS[i], False).asString(), camera_path, data)
+        for i in range(0, len(PlayblastCreatorShotMaskLocator.TEXT_ATTRS), 2):
+            parsed_text = self.parse_text(dag_fn.findPlug(PlayblastCreatorShotMaskLocator.TEXT_ATTRS[i], False).asString(), camera_path, data)
             data.parsed_fields.append(parsed_text)
 
         # --- Shot mask dimension data
@@ -551,7 +551,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
     def addUIDrawables(self, obj_path, draw_manager, frame_context, data):
         """
         """
-        if not (data and isinstance(data, ConestogaShotMaskData)):
+        if not (data and isinstance(data, PlayblastCreatorShotMaskData)):
             return
 
         vp_half_width = 0.5 * data.vp_width
@@ -638,7 +638,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
             mask_height = vp_height / camera_fn.overscan / scale
             mask_width = mask_height * device_aspect_ratio
         else:
-            om.MGlobal.displayError("[ConestogaShotMask] Unsupported Film Fit value")
+            om.MGlobal.displayError("[PlayblastCreatorShotMask] Unsupported Film Fit value")
             return None, None
 
         return mask_width, mask_height
@@ -684,7 +684,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
         texture_manager = omr.MRenderer.getTextureManager()
         texture = texture_manager.acquireTexture(data.parsed_fields[data_index]["image_path"])
         if not texture:
-            om.MGlobal.displayError("[ConestogaShotMask] Unsupported image file: {0}".format(data.image_paths[data_index]))
+            om.MGlobal.displayError("[PlayblastCreatorShotMask] Unsupported image file: {0}".format(data.image_paths[data_index]))
             return
 
         draw_manager.setTexture(texture)
@@ -782,7 +782,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
         image_path = ""
 
         text = orig_text
-        text = ConestogaShotMaskCustomPresets.parse_shot_mask_text(text)
+        text = PlayblastCreatorShotMaskCustomPresets.parse_shot_mask_text(text)
 
         if "{counter}" in text:
             text = text.replace("{counter}", "{0}".format(str(data.current_time).zfill(data.counter_padding)))
@@ -803,7 +803,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
 
         stripped_text = text.strip()
         if stripped_text.startswith("{logo}"):
-            logo_path = ConestogaPlayblastCmd.resolve_env_var(ConestogaPlayblastCmd.LOGO_PATH_ENV_VAR, ConestogaPlayblastCmd.LOGO_PATH_OPTION_VAR)
+            logo_path = PlayblastCreatorCmd.resolve_env_var(PlayblastCreatorCmd.LOGO_PATH_ENV_VAR, PlayblastCreatorCmd.LOGO_PATH_OPTION_VAR)
             image_path, text = self.get_image(logo_path)
 
         if stripped_text.startswith("{image=") and stripped_text.endswith("}"):
@@ -815,7 +815,7 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
     def creator(obj):
         """
         """
-        return ConestogaShotMaskDrawOverride(obj)
+        return PlayblastCreatorShotMaskDrawOverride(obj)
 
     @staticmethod
     def draw(context, data):
@@ -827,29 +827,29 @@ class ConestogaShotMaskDrawOverride(omr.MPxDrawOverride):
 def initializePlugin(obj):
     """
     """
-    plugin_fn = om.MFnPlugin(obj, "Conestoga College", ConestogaPlayblastCmd.PLUG_IN_VERSION, "Any")
+    plugin_fn = om.MFnPlugin(obj, "Playblast Creator", PlayblastCreatorCmd.PLUG_IN_VERSION, "Any")
 
     try:
-        plugin_fn.registerCommand(ConestogaPlayblastCmd.COMMAND_NAME, ConestogaPlayblastCmd.creator, ConestogaPlayblastCmd.create_syntax)
+        plugin_fn.registerCommand(PlayblastCreatorCmd.COMMAND_NAME, PlayblastCreatorCmd.creator, PlayblastCreatorCmd.create_syntax)
     except:
-        om.MGlobal.displayError("Failed to register command: {0}".format(ConestogaPlayblastCmd.COMMAND_NAME))
+        om.MGlobal.displayError("Failed to register command: {0}".format(PlayblastCreatorCmd.COMMAND_NAME))
 
     try:
-        plugin_fn.registerNode(ConestogaShotMaskLocator.NAME,
-                               ConestogaShotMaskLocator.TYPE_ID,
-                               ConestogaShotMaskLocator.creator,
-                               ConestogaShotMaskLocator.initialize,
+        plugin_fn.registerNode(PlayblastCreatorShotMaskLocator.NAME,
+                               PlayblastCreatorShotMaskLocator.TYPE_ID,
+                               PlayblastCreatorShotMaskLocator.creator,
+                               PlayblastCreatorShotMaskLocator.initialize,
                                om.MPxNode.kLocatorNode,
-                               ConestogaShotMaskLocator.DRAW_DB_CLASSIFICATION)
+                               PlayblastCreatorShotMaskLocator.DRAW_DB_CLASSIFICATION)
     except:
-        om.MGlobal.displayError("Failed to register node: {0}".format(ConestogaShotMaskLocator.NAME))
+        om.MGlobal.displayError("Failed to register node: {0}".format(PlayblastCreatorShotMaskLocator.NAME))
 
     try:
-        omr.MDrawRegistry.registerDrawOverrideCreator(ConestogaShotMaskLocator.DRAW_DB_CLASSIFICATION,
-                                                      ConestogaShotMaskLocator.DRAW_REGISTRANT_ID,
-                                                      ConestogaShotMaskDrawOverride.creator)
+        omr.MDrawRegistry.registerDrawOverrideCreator(PlayblastCreatorShotMaskLocator.DRAW_DB_CLASSIFICATION,
+                                                      PlayblastCreatorShotMaskLocator.DRAW_REGISTRANT_ID,
+                                                      PlayblastCreatorShotMaskDrawOverride.creator)
     except:
-        om.MGlobal.displayError("Failed to register draw override: {0}".format(ConestogaShotMaskDrawOverride.NAME))
+        om.MGlobal.displayError("Failed to register draw override: {0}".format(PlayblastCreatorShotMaskDrawOverride.NAME))
 
 
 def uninitializePlugin(obj):
@@ -858,27 +858,27 @@ def uninitializePlugin(obj):
     plugin_fn = om.MFnPlugin(obj)
 
     try:
-        omr.MDrawRegistry.deregisterDrawOverrideCreator(ConestogaShotMaskLocator.DRAW_DB_CLASSIFICATION, ConestogaShotMaskLocator.DRAW_REGISTRANT_ID)
+        omr.MDrawRegistry.deregisterDrawOverrideCreator(PlayblastCreatorShotMaskLocator.DRAW_DB_CLASSIFICATION, PlayblastCreatorShotMaskLocator.DRAW_REGISTRANT_ID)
     except:
-        om.MGlobal.displayError("Failed to deregister draw override: {0}".format(ConestogaShotMaskDrawOverride.NAME))
+        om.MGlobal.displayError("Failed to deregister draw override: {0}".format(PlayblastCreatorShotMaskDrawOverride.NAME))
 
     try:
-        plugin_fn.deregisterNode(ConestogaShotMaskLocator.TYPE_ID)
+        plugin_fn.deregisterNode(PlayblastCreatorShotMaskLocator.TYPE_ID)
     except:
-        om.MGlobal.displayError("Failed to unregister node: {0}".format(ConestogaShotMaskLocator.NAME))
+        om.MGlobal.displayError("Failed to unregister node: {0}".format(PlayblastCreatorShotMaskLocator.NAME))
 
     try:
-        plugin_fn.deregisterCommand(ConestogaPlayblastCmd.COMMAND_NAME)
+        plugin_fn.deregisterCommand(PlayblastCreatorCmd.COMMAND_NAME)
     except:
-        om.MGlobal.displayError("Failed to deregister command: {0}".format(ConestogaPlayblastCmd.COMMAND_NAME))
+        om.MGlobal.displayError("Failed to deregister command: {0}".format(PlayblastCreatorCmd.COMMAND_NAME))
 
 
 if __name__ == "__main__":
 
     cmds.file(f=True, new=True)
 
-    plugin_name = "conestoga_playblast.py"
+    plugin_name = "playblast_creator.py"
     cmds.evalDeferred('if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(plugin_name))
     cmds.evalDeferred('if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(plugin_name))
 
-    cmds.evalDeferred('cmds.createNode("ConestogaShotMask")')
+    cmds.evalDeferred('cmds.createNode("PlayblastCreatorShotMask")')

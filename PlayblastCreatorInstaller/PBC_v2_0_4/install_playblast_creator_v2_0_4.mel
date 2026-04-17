@@ -1,4 +1,4 @@
-// Conestoga Playblast Tool v2.0.4 - Drag & Drop Installer
+// Playblast Creator Tool v2.0.4 - Drag & Drop Installer
 // Drag this MEL file into a Maya viewport or source it manually.
 
 global proc string cstg_cleanWhatIsPath(string $whatIsValue)
@@ -8,14 +8,14 @@ global proc string cstg_cleanWhatIsPath(string $whatIsValue)
     return $path;
 }
 
-global proc installConestogaPlayblastV204()
+global proc installPlayblastCreatorV204()
 {
-    string $whatIsValue = `whatIs installConestogaPlayblastV204`;
+    string $whatIsValue = `whatIs installPlayblastCreatorV204`;
     string $resolvedPath = `cstg_cleanWhatIsPath $whatIsValue`;
 
     if (`gmatch $resolvedPath "Unknown*"`)
     {
-        error "[Conestoga Playblast] Unable to resolve installer path. Save the file locally and retry.";
+        error "[Playblast Creator] Unable to resolve installer path. Save the file locally and retry.";
         return;
     }
 
@@ -24,13 +24,13 @@ global proc installConestogaPlayblastV204()
 
     string $pythonCmd = "import os, runpy\n";
     $pythonCmd += "source_dir = r'" + $sourceDir + "'\n";
-    $pythonCmd += "installer = os.path.join(source_dir, 'install_conestoga_playblast_v2_0_4.py')\n";
+    $pythonCmd += "installer = os.path.join(source_dir, 'install_playblast_creator_v2_0_4.py')\n";
     $pythonCmd += "if not os.path.exists(installer):\n";
-    $pythonCmd += "    raise RuntimeError('[Conestoga Playblast] Missing installer file: {0}'.format(installer))\n";
+    $pythonCmd += "    raise RuntimeError('[Playblast Creator] Missing installer file: {0}'.format(installer))\n";
     $pythonCmd += "installer_globals = runpy.run_path(installer)\n";
     $pythonCmd += "installer_globals['install'](source_dir=source_dir)\n";
 
     python($pythonCmd);
 }
 
-installConestogaPlayblastV204();
+installPlayblastCreatorV204();

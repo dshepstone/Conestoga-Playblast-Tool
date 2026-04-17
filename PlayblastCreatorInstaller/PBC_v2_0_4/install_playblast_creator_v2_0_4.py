@@ -1,6 +1,6 @@
-"""Conestoga Playblast v2.0.4 installer.
+"""Playblast Creator v2.0.4 installer.
 
-Executed by install_conestoga_playblast_v2_0_4.mel when dragged into Maya.
+Executed by install_playblast_creator_v2_0_4.mel when dragged into Maya.
 """
 
 import os
@@ -11,14 +11,14 @@ import maya.cmds as cmds
 import maya.mel as mel
 
 
-VERSION_FOLDER = "CP_v2_0_4"
-TOOL_FOLDER = "conestoga_playblast"
-ICON_NAME = "conestoga_playblast_icon.png"
+VERSION_FOLDER = "PBC_v2_0_4"
+TOOL_FOLDER = "playblast_creator"
+ICON_NAME = "playblast_creator_icon.png"
 
 REQUIRED_FILES = [
-    "conestoga_playblast.py",
-    "conestoga_playblast_ui.py",
-    "conestoga_playblast_presets.py",
+    "playblast_creator.py",
+    "playblast_creator_ui.py",
+    "playblast_creator_presets.py",
 ]
 
 
@@ -35,7 +35,7 @@ def _copy_required_files(source_dir, install_root):
     ]
     if missing:
         raise RuntimeError(
-            "[Conestoga Playblast] Missing required files: {0}".format(", ".join(missing))
+            "[Playblast Creator] Missing required files: {0}".format(", ".join(missing))
         )
 
     os.makedirs(install_root, exist_ok=True)
@@ -48,7 +48,7 @@ def _install_icon(source_dir, icons_dir):
     package_root = os.path.dirname(source_dir)
     source_icon = os.path.join(package_root, ICON_NAME)
     if not os.path.exists(source_icon):
-        print("[Conestoga Playblast] Icon not found: {0}".format(source_icon))
+        print("[Playblast Creator] Icon not found: {0}".format(source_icon))
         return ""
 
     os.makedirs(icons_dir, exist_ok=True)
@@ -60,24 +60,24 @@ def _install_icon(source_dir, icons_dir):
 def _write_launcher(scripts_dir):
     launcher_root = os.path.join(scripts_dir, TOOL_FOLDER)
     os.makedirs(launcher_root, exist_ok=True)
-    launcher_path = os.path.join(launcher_root, "conestoga_playblast_latest.py")
+    launcher_path = os.path.join(launcher_root, "playblast_creator_latest.py")
 
     launcher_source = (
         "import os\n"
         "import sys\n"
         "import importlib\n"
         "import maya.cmds as cmds\n\n"
-        "root = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'conestoga_playblast', 'CP_v2_0_4')\n"
+        "root = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'playblast_creator', 'PBC_v2_0_4')\n"
         "if root not in sys.path:\n"
         "    sys.path.insert(0, root)\n\n"
         "def launch():\n"
-        "    module = importlib.import_module('conestoga_playblast_ui')\n"
+        "    module = importlib.import_module('playblast_creator_ui')\n"
         "    importlib.reload(module)\n"
         "    if hasattr(module, 'show_ui'):\n"
         "        return module.show_ui()\n"
         "    if hasattr(module, 'show_playblast_dialog'):\n"
         "        return module.show_playblast_dialog()\n"
-        "    raise RuntimeError('No UI entry point found in conestoga_playblast_ui.py')\n"
+        "    raise RuntimeError('No UI entry point found in playblast_creator_ui.py')\n"
     )
 
     with open(launcher_path, "w") as launcher_file:
@@ -88,24 +88,24 @@ def _add_shelf_button(icon_path):
     try:
         shelf_top_level = mel.eval('$tmp = $gShelfTopLevel')
         if not shelf_top_level:
-            print("[Conestoga Playblast] Shelf layout not available. Skipping shelf button creation.")
+            print("[Playblast Creator] Shelf layout not available. Skipping shelf button creation.")
             return
 
         current_shelf = cmds.tabLayout(shelf_top_level, q=True, selectTab=True)
         if not current_shelf:
-            print("[Conestoga Playblast] No active shelf tab. Skipping shelf button creation.")
+            print("[Playblast Creator] No active shelf tab. Skipping shelf button creation.")
             return
 
         existing_buttons = cmds.shelfLayout(current_shelf, q=True, childArray=True) or []
         for button in existing_buttons:
             if cmds.objectTypeUI(button) == "shelfButton":
                 cmd = cmds.shelfButton(button, q=True, command=True) or ""
-                if "conestoga_playblast_latest" in cmd:
+                if "playblast_creator_latest" in cmd:
                     cmds.deleteUI(button)
 
         shelf_command = (
             "import os, runpy, maya.cmds as cmds\n"
-            "launcher = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'conestoga_playblast', 'conestoga_playblast_latest.py')\n"
+            "launcher = os.path.join(cmds.internalVar(userAppDir=True), 'scripts', 'playblast_creator', 'playblast_creator_latest.py')\n"
             "globals_dict = runpy.run_path(launcher)\n"
             "globals_dict['launch']()"
         )
@@ -115,7 +115,7 @@ def _add_shelf_button(icon_path):
         cmds.shelfButton(
             parent=current_shelf,
             label="Playblast",
-            annotation="Launch Conestoga Playblast",
+            annotation="Launch Playblast Creator",
             image1=image_name,
             imageOverlayLabel="",
             command=shelf_command,
@@ -123,7 +123,7 @@ def _add_shelf_button(icon_path):
         )
 
     except Exception as exc:
-        print("[Conestoga Playblast] Failed to create shelf button: {0}".format(exc))
+        print("[Playblast Creator] Failed to create shelf button: {0}".format(exc))
 
 
 def install(source_dir=None):
@@ -140,8 +140,8 @@ def install(source_dir=None):
     _add_shelf_button(icon_path)
 
     message = "Installation complete.\nInstalled to:\n{0}".format(install_root)
-    cmds.confirmDialog(title="Conestoga Playblast", message=message, button=["OK"])
-    print("[Conestoga Playblast] Installed v2.0.4 to: {0}".format(install_root))
+    cmds.confirmDialog(title="Playblast Creator", message=message, button=["OK"])
+    print("[Playblast Creator] Installed v2.0.4 to: {0}".format(install_root))
 
 
 if __name__ == "__main__":
