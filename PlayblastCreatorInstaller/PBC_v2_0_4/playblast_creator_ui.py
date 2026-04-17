@@ -2383,6 +2383,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         main_layout.addWidget(self.tabs, stretch=1)
         main_layout.addWidget(footer_frame)
 
+        # All widgets exist by this point — install tooltips.
+        self._apply_tooltips()
+
     # ------------------------------------------------------------------
     # Helpers used by create_layouts()
     # ------------------------------------------------------------------
@@ -2391,6 +2394,16 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         label = QtWidgets.QLabel(text)
         label.setStyleSheet(
             "font-weight: bold; color: #4B94CF; font-size: 12px; padding: 4px 2px;"
+        )
+        return label
+
+    @staticmethod
+    def _help_caption(text):
+        """Grey, wrapping help-text label displayed at the top of each tab."""
+        label = QtWidgets.QLabel(text)
+        label.setWordWrap(True)
+        label.setStyleSheet(
+            "color: #9A9A9A; font-size: 11px; padding: 2px 2px 6px 2px;"
         )
         return label
 
@@ -2485,6 +2498,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
+        tab_layout.addWidget(self._help_caption(
+            "Choose where the playblast is saved and what it is called. "
+            "Tokens like {project}, {scene}, {timestamp} are expanded when "
+            "the playblast is created. Use the Name Generator to build a "
+            "class-style filename automatically."
+        ))
         tab_layout.addWidget(destination_card)
         tab_layout.addWidget(name_gen_card)
         tab_layout.addStretch()
@@ -2553,6 +2572,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
+        tab_layout.addWidget(self._help_caption(
+            "Controls what Maya renders into the playblast: which camera, "
+            "image size, frame range, and which scene elements are visible. "
+            "These settings match Maya's standard playblast options."
+        ))
         tab_layout.addWidget(camera_card)
         tab_layout.addWidget(resolution_card)
         tab_layout.addWidget(frame_range_card)
@@ -2576,19 +2600,17 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         encoding_body.addLayout(encoding_form)
         encoding_body.addLayout(settings_row)
 
-        help_label = QtWidgets.QLabel(
-            "Pick a container format, then the codec you want inside it. "
-            "Use the Settings button to adjust quality and preset."
-        )
-        help_label.setWordWrap(True)
-        help_label.setStyleSheet("color: #9A9A9A; font-size: 11px; padding: 4px 0;")
-
         tab_inner = QtWidgets.QWidget()
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
+        tab_layout.addWidget(self._help_caption(
+            "Pick a container format (the output file type) and the codec "
+            "used inside it. Common choices: mp4 + H.264 for submissions, "
+            "mov + ProRes for editorial, Image for a PNG/JPG sequence. "
+            "Use Settings... to tune quality and preset."
+        ))
         tab_layout.addWidget(encoding_card)
-        tab_layout.addWidget(help_label)
         tab_layout.addStretch()
 
         return self._wrap_in_scroll(tab_inner)
@@ -2698,6 +2720,13 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
+        tab_layout.addWidget(self._help_caption(
+            "Overlay text and letterbox bars burned into the playblast. "
+            "Each slot accepts plain text or tokens (e.g. {scene}, "
+            "{camera}, {counter}). Tick Show to display a slot; clear it "
+            "to hide. Click Apply Shot Mask Settings to push changes to "
+            "the scene's mask node."
+        ))
         tab_layout.addWidget(enable_card)
         tab_layout.addWidget(labels_card)
         tab_layout.addWidget(tokens_card)
@@ -2746,6 +2775,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
+        tab_layout.addWidget(self._help_caption(
+            "One-time tool setup. Point FFmpeg at your ffmpeg.exe so the "
+            "tool can transcode to H.264/ProRes. The temp folder is used "
+            "for the Preview button and for image sequences before "
+            "encoding. Click Apply Tool Settings to save."
+        ))
         tab_layout.addWidget(paths_card)
         tab_layout.addLayout(apply_row)
         tab_layout.addStretch()
@@ -2789,6 +2824,227 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         footer_layout.addLayout(action_row)
 
         return footer_frame
+
+    # ------------------------------------------------------------------
+    # Tooltips
+    # ------------------------------------------------------------------
+    def _apply_tooltips(self):
+        """Install concise hover tooltips on every user-facing control.
+
+        Called at the end of create_layouts(), once every widget exists.
+        Keep tooltip text short, plain-language, and example-driven so
+        students can learn the tool without reading docs.
+        """
+
+        # --- Output tab -----------------------------------------------
+        self.output_dir_path_le.setToolTip(
+            "Folder where the playblast file will be saved.\n"
+            "Supports tokens: {project}, {scene}, {timestamp}.\n"
+            "Example: {project}/movies"
+        )
+        self.output_dir_path_select_btn.setToolTip("Browse for an output folder.")
+        self.output_dir_path_show_folder_btn.setToolTip(
+            "Open the current output folder in your file browser."
+        )
+        self.output_filename_le.setToolTip(
+            "Output filename without extension.\n"
+            "Supports tokens: {scene}, {timestamp}, {camera}.\n"
+            "Example: {scene}_{timestamp}"
+        )
+        self.force_overwrite_cb.setToolTip(
+            "If checked, overwrite an existing file with the same name.\n"
+            "If unchecked, the playblast aborts when the file exists."
+        )
+
+        self.assignmentSpinBox.setToolTip("Assignment number (the 'A1' prefix).")
+        self.lastnameLineEdit.setToolTip("Your last name for the filename.")
+        self.firstnameLineEdit.setToolTip("Your first name for the filename.")
+        self.versionTypeCombo.setToolTip(
+            "wip  = work in progress\n"
+            "final = final submission version"
+        )
+        self.versionNumberSpinBox.setToolTip(
+            "Version number, zero-padded to two digits (e.g. 01, 02)."
+        )
+        self.filenamePreviewLabel.setToolTip(
+            "Live preview of the generated filename."
+        )
+        self.generateFilenameButton.setToolTip(
+            "Copy the generated name into the Filename field above."
+        )
+        self.resetNameGeneratorButton.setToolTip(
+            "Clear the Name Generator fields back to defaults."
+        )
+
+        # --- Render tab -----------------------------------------------
+        self.camera_select_cmb.setToolTip(
+            "Camera to render from. 'Active' uses whichever viewport "
+            "camera is currently focused when the playblast runs."
+        )
+        self.camera_select_hide_defaults_cb.setToolTip(
+            "Hide Maya's built-in cameras (persp, top, front, side) "
+            "from this list."
+        )
+        self.resolution_select_cmb.setToolTip(
+            "Output image size. Choose a preset or 'Custom' to enter "
+            "your own width and height."
+        )
+        self.resolution_width_sb.setToolTip("Output image width in pixels.")
+        self.resolution_height_sb.setToolTip("Output image height in pixels.")
+        self.frame_range_cmb.setToolTip(
+            "Frames to render:\n"
+            "  Animation  - scene's animation start/end\n"
+            "  Playback   - timeline start/end\n"
+            "  Render     - Render Globals start/end\n"
+            "  Camera     - use the camera's own frame range\n"
+            "  Custom     - type start/end yourself"
+        )
+        self.frame_range_start_sb.setToolTip("First frame to render.")
+        self.frame_range_end_sb.setToolTip("Last frame to render.")
+
+        self.visibility_cmb.setToolTip(
+            "Viewport visibility preset - controls which object types "
+            "(geometry, cameras, lights, NURBS, etc.) are drawn."
+        )
+        self.visibility_customize_btn.setToolTip(
+            "Open the Visibility dialog to toggle individual object types."
+        )
+
+        self.overscan_cb.setToolTip(
+            "Render the camera's overscan area (extra pixels outside the "
+            "film gate). Usually OFF for submissions."
+        )
+        self.ornaments_cb.setToolTip(
+            "Include Maya's viewport ornaments (HUDs, axis, resolution "
+            "gate labels). Usually OFF for a clean playblast."
+        )
+        self.offscreen_cb.setToolTip(
+            "Render in an offscreen buffer so other windows can't "
+            "corrupt the frames. Safer, slightly slower."
+        )
+        self.viewer_cb.setToolTip(
+            "Automatically open the finished playblast in your default "
+            "movie player."
+        )
+        self.shot_mask_cb.setToolTip(
+            "Show the Shot Mask overlay (text + letterbox) during the "
+            "playblast. Configure it on the Shot Mask tab."
+        )
+        self.fit_shot_mask_cb.setToolTip(
+            "Shrink the render inside the shot-mask borders instead of "
+            "drawing the mask on top of the image."
+        )
+        self.nurbs_curves_cb.setToolTip(
+            "Show NURBS curves (controls, motion paths) in the playblast."
+        )
+        self.nurbs_surfaces_cb.setToolTip(
+            "Show NURBS surfaces in the playblast."
+        )
+
+        # --- Encoding tab ---------------------------------------------
+        self.encoding_container_cmb.setToolTip(
+            "Output file format:\n"
+            "  mp4   - most compatible, best for submissions\n"
+            "  mov   - QuickTime, good for editorial\n"
+            "  Image - a numbered sequence of stills"
+        )
+        self.encoding_video_codec_cmb.setToolTip(
+            "Codec used inside the chosen container.\n"
+            "H.264 = small + universal.  ProRes = editorial-friendly.\n"
+            "PNG / jpg = lossless or light image frames."
+        )
+        self.encoding_video_codec_settings_btn.setToolTip(
+            "Open encoder settings (quality, preset, bitrate)."
+        )
+
+        # --- Shot Mask tab --------------------------------------------
+        self.sm_enable_mask_cb.setToolTip(
+            "Enable the shot-mask overlay on the playblast."
+        )
+        self.sm_top_border_cb.setToolTip(
+            "Draw a solid black bar across the top of the frame."
+        )
+        self.sm_bottom_border_cb.setToolTip(
+            "Draw a solid black bar across the bottom of the frame."
+        )
+
+        label_slot_tip = (
+            "Text shown in this mask slot.\n"
+            "Tokens are expanded at playblast time: {scene}, {camera}, "
+            "{counter}, {fps}, {date}, {username}, {shot}."
+        )
+        for line_edit in (
+            self.sm_top_left_le,
+            self.sm_top_center_le,
+            self.sm_top_right_le,
+            self.sm_bottom_left_le,
+            self.sm_bottom_center_le,
+            self.sm_bottom_right_le,
+        ):
+            line_edit.setToolTip(label_slot_tip)
+
+        show_tip = "Show this label slot in the mask. Uncheck to hide it."
+        for check_box in (
+            self.sm_top_left_cb,
+            self.sm_top_center_cb,
+            self.sm_top_right_cb,
+            self.sm_bottom_left_cb,
+            self.sm_bottom_center_cb,
+            self.sm_bottom_right_cb,
+        ):
+            check_box.setToolTip(show_tip)
+
+        self.sm_common_items_cmb.setToolTip(
+            "Pre-built dynamic values you can insert into any label slot."
+        )
+        self.sm_insert_item_btn.setToolTip(
+            "Insert the selected token into whichever label field you "
+            "clicked most recently."
+        )
+        self.sm_counter_padding_sb.setToolTip(
+            "Number of digits used for the {counter} token\n"
+            "(e.g. 4 prints frame 7 as 0007)."
+        )
+        self.sm_use_namegen_btn.setToolTip(
+            "Copy the Name Generator preview into the Top Center slot."
+        )
+        self.sm_apply_btn.setToolTip(
+            "Push these settings onto the scene's shot-mask node."
+        )
+
+        # --- Settings tab ---------------------------------------------
+        self.tool_ffmpeg_path_le.setToolTip(
+            "Full path to ffmpeg (ffmpeg.exe on Windows). Required for "
+            "encoding to H.264/ProRes. Download from ffmpeg.org if you "
+            "don't have it."
+        )
+        self.tool_ffmpeg_browse_btn.setToolTip("Browse for the ffmpeg executable.")
+        self.tool_temp_dir_le.setToolTip(
+            "Folder used for intermediate image sequences and for the "
+            "Preview button's throwaway output."
+        )
+        self.tool_temp_dir_browse_btn.setToolTip("Browse for the temp folder.")
+        self.tool_temp_format_cmb.setToolTip(
+            "Image format used for intermediate frames before ffmpeg "
+            "encodes them into the final video."
+        )
+        self.tool_apply_btn.setToolTip(
+            "Save the paths above so the tool remembers them next time."
+        )
+
+        # --- Footer ---------------------------------------------------
+        self.log_to_script_editor_cb.setToolTip(
+            "Also print tool messages into Maya's Script Editor."
+        )
+        self.clear_btn.setToolTip("Clear the log panel above.")
+        self.preview_btn.setToolTip(
+            "Quick low-effort playblast written to the Temp folder, "
+            "handy for previewing settings without committing to a final "
+            "file."
+        )
+        self.execute_btn.setToolTip(
+            "Create the full playblast using the options on every tab."
+        )
 
 
 _pbc_playblast_workspace_control = None
