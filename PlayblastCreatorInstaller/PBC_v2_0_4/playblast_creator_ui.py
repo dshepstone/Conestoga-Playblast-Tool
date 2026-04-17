@@ -10,6 +10,7 @@
 
 import copy
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -183,6 +184,103 @@ class PBCPlayblastUtils(object):
             pass
 
         return scale_value
+
+    # ------------------------------------------------------------------
+    # Encoder / codec availability
+    # ------------------------------------------------------------------
+    _available_video_encoders_cache = None
+
+    # ffmpeg encoder ids the tool knows how to drive.
+    FFMPEG_TARGET_ENCODERS = (
+        "libx264",
+        "h264_nvenc",
+        "h264_videotoolbox",
+        "mpeg4",
+        "prores",
+        "prores_ks",
+    )
+
+    @classmethod
+    def detect_available_video_encoders(cls, ffmpeg_path=None, use_cache=True):
+        """Return a set of ffmpeg encoder ids that are present in the binary.
+
+        Runs `ffmpeg -hide_banner -encoders` and parses the output. On
+        failure (no binary, timeout, permission error) returns an empty
+        set so the caller can fall back to Maya-native image sequences.
+        """
+        if use_cache and cls._available_video_encoders_cache is not None:
+            return cls._available_video_encoders_cache
+
+        if ffmpeg_path is None:
+            try:
+                ffmpeg_path = cls.get_ffmpeg_path()
+            except Exception:
+                ffmpeg_path = ""
+
+        found = set()
+        if ffmpeg_path and os.path.isfile(ffmpeg_path):
+            try:
+                popen_kwargs = {
+                    "stdout": subprocess.PIPE,
+                    "stderr": subprocess.STDOUT,
+                }
+                # Prevent a console flash on Windows.
+                if sys.platform == "win32":
+                    popen_kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+                proc = subprocess.Popen(
+                    [ffmpeg_path, "-hide_banner", "-encoders"],
+                    **popen_kwargs
+                )
+                try:
+                    out, _ = proc.communicate(timeout=5)
+                except Exception:
+                    proc.kill()
+                    out = b""
+                text = (out or b"").decode("utf-8", errors="ignore").lower()
+                for name in cls.FFMPEG_TARGET_ENCODERS:
+                    # ffmpeg lists each encoder on its own line; look for
+                    # the whitespace-delimited token.
+                    if " {0} ".format(name) in " " + text + " ":
+                        found.add(name)
+            except Exception:
+                found = set()
+
+        cls._available_video_encoders_cache = found
+        return found
+
+    @classmethod
+    def invalidate_encoder_cache(cls):
+        cls._available_video_encoders_cache = None
+
+    @classmethod
+    def detect_available_image_compressions(cls):
+        """Return Maya's native image-sequence compressions that are present.
+
+        Queries `cmds.playblast(query=True, format=True)` and then, if
+        the 'image' format is available, returns the intersection of
+        the encoders the tool exposes (png / jpg / tif) and what Maya
+        reports. Falls back to the full set if Maya can't be queried.
+        """
+        wanted = ("png", "jpg", "tif")
+        try:
+            formats = cmds.playblast(query=True, format=True) or []
+        except Exception:
+            return list(wanted)
+
+        if "image" not in [f.lower() for f in formats]:
+            # Extremely unusual, but be safe.
+            return list(wanted)
+
+        try:
+            compressions = cmds.playblast(query=True, compression=True) or []
+            compressions_lower = {c.lower() for c in compressions}
+            filtered = [c for c in wanted if c in compressions_lower]
+            if filtered:
+                return filtered
+        except Exception:
+            pass
+
+        return list(wanted)
 
 
 class PBCCollapsibleGrpHeader(QtWidgets.QWidget):
@@ -633,10 +731,31 @@ class PBCPlayblast(QtCore.QObject):
         "Camera",
     ]
 
+    # Internal encoder ids the tool knows how to drive, per container.
+    # Friendly labels shown in the UI come from ENCODER_DISPLAY_LABEL.
     VIDEO_ENCODER_LOOKUP = {
-        "mov": ["h264"],
-        "mp4": ["h264"],
-        "Image": ["jpg", "png", "tif"],
+        "mov": ["h264", "mpeg4", "prores"],
+        "mp4": ["h264", "mpeg4"],
+        "Image": ["png", "jpg", "tif"],
+    }
+
+    # Display labels for the encoder combo box. Keeps internal ids
+    # ("h264", "mpeg4", ...) stable while showing something clearer.
+    ENCODER_DISPLAY_LABEL = {
+        "h264": "H.264 (libx264)",
+        "mpeg4": "MPEG-4",
+        "prores": "Apple ProRes",
+        "png": "PNG (sequence)",
+        "jpg": "JPEG (sequence)",
+        "tif": "TIFF (sequence)",
+    }
+
+    # Map our internal encoder id to the ffmpeg encoder names that can
+    # satisfy it. Order matters: first match wins.
+    ENCODER_TO_FFMPEG = {
+        "h264": ("h264_nvenc", "h264_videotoolbox", "libx264"),
+        "mpeg4": ("mpeg4",),
+        "prores": ("prores_ks", "prores"),
     }
 
     H264_QUALITIES = {
@@ -1162,11 +1281,11 @@ class PBCPlayblast(QtCore.QObject):
             else:
                 source_path = "{0}/{1}.%0{2}d.{3}".format(playblast_output_dir, filename, padding, temp_file_extension)
 
-            if self._encoder == "h264":
+            if self._encoder in ("h264", "mpeg4", "prores"):
                 if temp_file_is_movie:
-                    self.transcode_h264(ffmpeg_path, source_path, output_path)
+                    self.transcode_video(self._encoder, ffmpeg_path, source_path, output_path)
                 else:
-                    self.encode_h264(ffmpeg_path, source_path, output_path, start_frame)
+                    self.encode_video(self._encoder, ffmpeg_path, source_path, output_path, start_frame)
             else:
                 self.log_error("Encoding failed. Unsupported encoder ({0}) for container ({1}).".format(self._encoder, self._container_format))
                 self.remove_temp_dir(playblast_output_dir, temp_file_extension)
@@ -1224,7 +1343,19 @@ class PBCPlayblast(QtCore.QObject):
         self._ffmpeg_process.readyReadStandardError.connect(self.process_ffmpeg_output)
 
     def get_platform_h264_video_codec(self):
-        codec = PBCPlayblast.PLATFORM_H264_CODEC_LOOKUP.get(sys.platform, "libx264")
+        """Pick the best available H.264 ffmpeg encoder for this platform.
+
+        Prefers the hardware accelerator if it was detected, otherwise
+        falls back to libx264 (software).
+        """
+        available = PBCPlayblastUtils.detect_available_video_encoders()
+        preferred = PBCPlayblast.PLATFORM_H264_CODEC_LOOKUP.get(sys.platform, "libx264")
+        if preferred in available:
+            codec = preferred
+        elif "libx264" in available:
+            codec = "libx264"
+        else:
+            codec = preferred
         self.log_output("Selected H.264 codec for platform '{0}': {1}".format(sys.platform, codec))
         return codec
 
@@ -1239,6 +1370,35 @@ class PBCPlayblast(QtCore.QObject):
             return ["-c:v", video_codec, "-q:v", "{0}".format(quality), "-pix_fmt", "yuv420p"]
 
         return ["-c:v", "libx264", "-crf:v", "{0}".format(crf), "-preset:v", preset, "-profile:v", "high", "-pix_fmt", "yuv420p"]
+
+    def get_mpeg4_video_codec_arguments(self, crf):
+        """MPEG-4 Part 2 (legacy but still very common in education).
+
+        ffmpeg's mpeg4 encoder uses -qscale:v 1..31 (lower = better),
+        so map our CRF range 18..26 onto roughly 2..7 which produces
+        a usable quality envelope.
+        """
+        qscale = max(1, min(8, int(round((crf - 15) / 2))))
+        return ["-c:v", "mpeg4", "-qscale:v", "{0}".format(qscale), "-pix_fmt", "yuv420p"]
+
+    def get_prores_video_codec_arguments(self):
+        """Apple ProRes 422 HQ - editorial-friendly, large files."""
+        available = PBCPlayblastUtils.detect_available_video_encoders()
+        codec = "prores_ks" if "prores_ks" in available else "prores"
+        return ["-c:v", codec, "-profile:v", "3", "-pix_fmt", "yuv422p10le"]
+
+    def get_video_codec_arguments(self, encoder, crf, preset):
+        """Dispatch ffmpeg codec arguments for a given internal encoder id."""
+        if encoder == "h264":
+            return self.get_h264_video_codec_arguments(crf, preset)
+        if encoder == "mpeg4":
+            return self.get_mpeg4_video_codec_arguments(crf)
+        if encoder == "prores":
+            return self.get_prores_video_codec_arguments()
+        # Unknown encoder - fall back to a lossless copy to avoid silent
+        # data loss. The caller will still have logged the mismatch.
+        self.log_warning("Unknown encoder '{0}', falling back to copy.".format(encoder))
+        return ["-c:v", "copy"]
 
     def execute_ffmpeg_command(self, program, arguments):
         self._ffmpeg_process.start(program, arguments)
@@ -1258,8 +1418,9 @@ class PBCPlayblast(QtCore.QObject):
         self.log_output(output)
 
 
-    def encode_h264(self, ffmpeg_path, source_path, output_path, start_frame):
-        self.log_output("Starting h264 encoding...")
+    def encode_video(self, encoder, ffmpeg_path, source_path, output_path, start_frame):
+        """Encode an image sequence into a video using the given encoder."""
+        self.log_output("Starting {0} encoding...".format(encoder))
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
         framerate = self.get_frame_rate()
@@ -1270,7 +1431,7 @@ class PBCPlayblast(QtCore.QObject):
 
         crf = PBCPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
-        video_codec_args = self.get_h264_video_codec_arguments(crf, preset)
+        video_codec_args = self.get_video_codec_arguments(encoder, crf, preset)
 
         arguments = []
         arguments.append("-y")
@@ -1290,13 +1451,14 @@ class PBCPlayblast(QtCore.QObject):
 
         self.execute_ffmpeg_command(ffmpeg_path, arguments)
 
-    def transcode_h264(self, ffmpeg_path, source_path, output_path):
-        self.log_output("Starting h264 transcoding...")
+    def transcode_video(self, encoder, ffmpeg_path, source_path, output_path):
+        """Transcode a video temp file into the final container/codec."""
+        self.log_output("Starting {0} transcoding...".format(encoder))
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
         crf = PBCPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
-        video_codec_args = self.get_h264_video_codec_arguments(crf, preset)
+        video_codec_args = self.get_video_codec_arguments(encoder, crf, preset)
 
         arguments = []
         arguments.append("-y")
@@ -1307,6 +1469,14 @@ class PBCPlayblast(QtCore.QObject):
         self.log_output("ffmpeg arguments: {0}\n".format(arguments))
 
         self.execute_ffmpeg_command(ffmpeg_path, arguments)
+
+    # Backwards-compatible wrappers so any external script referencing
+    # the older names keeps working.
+    def encode_h264(self, ffmpeg_path, source_path, output_path, start_frame):
+        return self.encode_video("h264", ffmpeg_path, source_path, output_path, start_frame)
+
+    def transcode_h264(self, ffmpeg_path, source_path, output_path):
+        return self.transcode_video("h264", ffmpeg_path, source_path, output_path)
 
 
     def get_frame_rate(self):
@@ -2012,21 +2182,132 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.camera_select_cmb.blockSignals(False)
 
     def refresh_encoding_codecs(self):
+        """Populate the codec combo with friendly labels + internal ids.
+
+        Each combo item stores its internal encoder id ("h264", "mpeg4",
+        "png", etc.) as userData so on_execute/on_preview can look it up
+        via currentData(). Unavailable ffmpeg encoders are shown but
+        disabled so students can see what would be possible once ffmpeg
+        is configured.
+        """
         container = self.encoding_container_cmb.currentText()
-        current_codec = self.encoding_video_codec_cmb.currentText() if self.encoding_video_codec_cmb.count() else ""
+        current_codec = (
+            self.encoding_video_codec_cmb.currentData()
+            if self.encoding_video_codec_cmb.count() else ""
+        )
 
         self.encoding_video_codec_cmb.blockSignals(True)
         self.encoding_video_codec_cmb.clear()
 
         codecs = PBCPlayblast.VIDEO_ENCODER_LOOKUP.get(container, [])
-        self.encoding_video_codec_cmb.addItems(codecs)
+        ffmpeg_encoders = PBCPlayblastUtils.detect_available_video_encoders()
+        image_compressions = PBCPlayblastUtils.detect_available_image_compressions()
 
-        if current_codec and self.encoding_video_codec_cmb.findText(current_codec) >= 0:
-            self.encoding_video_codec_cmb.setCurrentText(current_codec)
-        elif self.encoding_video_codec_cmb.count() > 0:
-            self.encoding_video_codec_cmb.setCurrentIndex(0)
+        first_enabled_index = -1
+        for codec_id in codecs:
+            label = PBCPlayblast.ENCODER_DISPLAY_LABEL.get(codec_id, codec_id)
+            available = True
+            reason = ""
+
+            if container in ("mov", "mp4"):
+                # Needs ffmpeg.
+                needed = PBCPlayblast.ENCODER_TO_FFMPEG.get(codec_id, ())
+                if not ffmpeg_encoders:
+                    available = False
+                    reason = "ffmpeg not configured (Settings tab)"
+                elif not any(name in ffmpeg_encoders for name in needed):
+                    available = False
+                    reason = "ffmpeg build does not ship this encoder"
+            elif container == "Image":
+                if codec_id not in image_compressions:
+                    available = False
+                    reason = "Maya cannot write this image format"
+
+            display = label if available else "{0} - unavailable".format(label)
+            self.encoding_video_codec_cmb.addItem(display, codec_id)
+            idx = self.encoding_video_codec_cmb.count() - 1
+
+            if not available:
+                model = self.encoding_video_codec_cmb.model()
+                item = model.item(idx) if hasattr(model, "item") else None
+                if item is not None:
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
+                self.encoding_video_codec_cmb.setItemData(
+                    idx, reason, QtCore.Qt.ToolTipRole
+                )
+            elif first_enabled_index == -1:
+                first_enabled_index = idx
+
+        # Restore previous selection if still available; otherwise pick
+        # the first enabled item so the user doesn't start with a
+        # disabled codec.
+        if current_codec:
+            match = self.encoding_video_codec_cmb.findData(current_codec)
+            if match >= 0:
+                self.encoding_video_codec_cmb.setCurrentIndex(match)
+            elif first_enabled_index >= 0:
+                self.encoding_video_codec_cmb.setCurrentIndex(first_enabled_index)
+        elif first_enabled_index >= 0:
+            self.encoding_video_codec_cmb.setCurrentIndex(first_enabled_index)
 
         self.encoding_video_codec_cmb.blockSignals(False)
+
+        # Drive the companion status label on the Encoding tab.
+        self._update_encoding_status_label(ffmpeg_encoders)
+
+    def _update_encoding_status_label(self, ffmpeg_encoders=None):
+        """Show a short summary of detected encoders on the Encoding tab."""
+        if not hasattr(self, "encoding_status_label"):
+            return
+
+        if ffmpeg_encoders is None:
+            ffmpeg_encoders = PBCPlayblastUtils.detect_available_video_encoders()
+
+        pretty_map = {
+            "libx264": "H.264 (libx264)",
+            "h264_nvenc": "H.264 (NVENC)",
+            "h264_videotoolbox": "H.264 (VideoToolbox)",
+            "mpeg4": "MPEG-4",
+            "prores": "ProRes",
+            "prores_ks": "ProRes",
+        }
+        names = []
+        seen = set()
+        for enc in PBCPlayblastUtils.FFMPEG_TARGET_ENCODERS:
+            if enc in ffmpeg_encoders:
+                label = pretty_map.get(enc, enc)
+                if label not in seen:
+                    names.append(label)
+                    seen.add(label)
+
+        # Maya-native image sequences are always available.
+        image_names = [
+            PBCPlayblast.ENCODER_DISPLAY_LABEL[c]
+            for c in PBCPlayblastUtils.detect_available_image_compressions()
+        ]
+
+        if ffmpeg_encoders:
+            text = (
+                "Detected video encoders: {0}.  Image sequences: {1}."
+            ).format(
+                ", ".join(names) if names else "none",
+                ", ".join(image_names) if image_names else "none",
+            )
+            self.encoding_status_label.setStyleSheet(
+                "color: #7FC97F; font-size: 11px; padding: 4px 2px;"
+            )
+        else:
+            text = (
+                "FFmpeg not configured - only image sequences ({0}) are "
+                "available. Set the FFmpeg path on the Settings tab to "
+                "unlock H.264 and MPEG-4 export."
+            ).format(", ".join(image_names) if image_names else "png/jpg/tif")
+            self.encoding_status_label.setStyleSheet(
+                "color: #E6A23C; font-size: 11px; padding: 4px 2px;"
+            )
+
+        self.encoding_status_label.setText(text)
+        self.encoding_status_label.setWordWrap(True)
 
     def _active_camera_override(self):
         camera = self.camera_select_cmb.currentText()
@@ -2072,7 +2353,13 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self.versionTypeCombo.currentText(),
             self.versionNumberSpinBox.value(),
         )
-        self.filenamePreviewLabel.setText(filename + "." + self.encoding_container_cmb.currentText().lower())
+        container = self.encoding_container_cmb.currentText()
+        if container == "Image":
+            # For image sequences the extension is the codec, not the container.
+            extension = (self.encoding_video_codec_cmb.currentData() or "png").lower()
+        else:
+            extension = container.lower()
+        self.filenamePreviewLabel.setText(filename + "." + extension)
 
     def apply_generated_filename(self):
         self.update_filename_preview()
@@ -2165,7 +2452,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_frame_range((start_frame, end_frame))
 
             container = self.encoding_container_cmb.currentText()
-            codec = self.encoding_video_codec_cmb.currentText()
+            codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
 
             self._playblast.set_camera(self._active_camera_override() or None)
@@ -2202,7 +2489,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_quick_viewport_toggles()
             container = self.encoding_container_cmb.currentText()
-            codec = self.encoding_video_codec_cmb.currentText()
+            codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
 
             self._playblast.execute(
@@ -2255,6 +2542,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             os.makedirs(temp_dir, exist_ok=True)
             PBCPlayblastUtils.set_temp_output_dir_path(temp_dir)
             PBCPlayblastUtils.set_temp_file_format(self.tool_temp_format_cmb.currentText())
+            # Re-probe ffmpeg so the codec list reflects the new binary.
+            PBCPlayblastUtils.invalidate_encoder_cache()
+            self.refresh_encoding_codecs()
             self.on_log_output("Tool settings applied.")
         except Exception:
             traceback.print_exc()
@@ -2267,6 +2557,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
         self.camera_select_hide_defaults_cb.toggled.connect(self.refresh_cameras)
         self.encoding_container_cmb.currentIndexChanged.connect(self.refresh_encoding_codecs)
+        self.encoding_container_cmb.currentIndexChanged.connect(self.update_filename_preview)
+        self.encoding_video_codec_cmb.currentIndexChanged.connect(self.update_filename_preview)
 
         self.generateFilenameButton.clicked.connect(self.apply_generated_filename)
         self.resetNameGeneratorButton.clicked.connect(self.reset_name_generator)
@@ -2600,6 +2892,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         encoding_body.addLayout(encoding_form)
         encoding_body.addLayout(settings_row)
 
+        # Live status describing what the tool detected on this machine.
+        self.encoding_status_label = QtWidgets.QLabel("Detecting encoders...")
+        self.encoding_status_label.setWordWrap(True)
+        self.encoding_status_label.setStyleSheet(
+            "color: #9A9A9A; font-size: 11px; padding: 4px 2px;"
+        )
+        encoding_body.addWidget(self.encoding_status_label)
+
         tab_inner = QtWidgets.QWidget()
         tab_layout = QtWidgets.QVBoxLayout(tab_inner)
         tab_layout.setContentsMargins(10, 10, 10, 10)
@@ -2608,7 +2908,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             "Pick a container format (the output file type) and the codec "
             "used inside it. Common choices: mp4 + H.264 for submissions, "
             "mov + ProRes for editorial, Image for a PNG/JPG sequence. "
-            "Use Settings... to tune quality and preset."
+            "Use Settings... to tune quality and preset. H.264, MPEG-4, "
+            "and PNG sequences are always offered; MPEG-4 and ProRes are "
+            "enabled automatically when your FFmpeg build supports them."
         ))
         tab_layout.addWidget(encoding_card)
         tab_layout.addStretch()
@@ -2950,8 +3252,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         )
         self.encoding_video_codec_cmb.setToolTip(
             "Codec used inside the chosen container.\n"
-            "H.264 = small + universal.  ProRes = editorial-friendly.\n"
-            "PNG / jpg = lossless or light image frames."
+            "  H.264   - small, universal; best for class submissions\n"
+            "  MPEG-4  - legacy, widely playable\n"
+            "  ProRes  - editorial, large files, mov only\n"
+            "  PNG / JPEG / TIFF - image sequence, no ffmpeg needed\n"
+            "Entries marked 'unavailable' are not present in your\n"
+            "current ffmpeg build; hover them for details."
         )
         self.encoding_video_codec_settings_btn.setToolTip(
             "Open encoder settings (quality, preset, bitrate)."
