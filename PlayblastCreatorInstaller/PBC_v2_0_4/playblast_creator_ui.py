@@ -1111,7 +1111,7 @@ class PBCPlayblast(QtCore.QObject):
             "quality": self._image_quality,
         }
 
-    def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False, include_sound=True):
+    def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False, include_sound=True, scale_percent=100, image_quality_override=None):
 
         ffmpeg_path = PBCPlayblastUtils.get_ffmpeg_path()
         if self.requires_ffmpeg() and not self.validate_ffmpeg(ffmpeg_path):
@@ -1172,7 +1172,9 @@ class PBCPlayblast(QtCore.QObject):
             playblast_output = os.path.normpath(os.path.join(playblast_output_dir, filename))
             force_overwrite = True
             viewer = False
-            quality = 100
+            # Maya's 'quality' flag in the temp pass only affects the
+            # intermediate; ffmpeg re-encodes with its own CRF/quality.
+            quality = 100 if image_quality_override is None else int(image_quality_override)
 
             if temp_file_is_movie:
                 format_ = "movie"
@@ -1187,7 +1189,8 @@ class PBCPlayblast(QtCore.QObject):
             force_overwrite = overwrite
             format_ = "image"
             compression = self._encoder
-            quality = self._image_quality
+            # User-supplied override wins; fall back to stored encoder setting.
+            quality = int(image_quality_override) if image_quality_override is not None else self._image_quality
             index_from_zero = False
             viewer = show_in_viewer
 
@@ -1212,10 +1215,21 @@ class PBCPlayblast(QtCore.QObject):
             return
 
 
+        # Clamp scale to Maya's allowed range; anything outside 10-100 is
+        # likely a user mistake from a custom settings file.
+        try:
+            scale_percent_int = int(scale_percent)
+        except (TypeError, ValueError):
+            scale_percent_int = 100
+        if scale_percent_int < 1:
+            scale_percent_int = 1
+        elif scale_percent_int > 100:
+            scale_percent_int = 100
+
         options = {
             "filename": playblast_output,
             "widthHeight": widthHeight,
-            "percent": 100,
+            "percent": scale_percent_int,
             "startTime": start_frame,
             "endTime": end_frame,
             "clearCache": True,
@@ -2055,20 +2069,30 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.force_overwrite_cb = QtWidgets.QCheckBox("Force overwrite")
 
         # Name Generator widgets
+        self.namegen_assignment_cb = QtWidgets.QCheckBox()
+        self.namegen_assignment_cb.setChecked(True)
         self.assignmentSpinBox = QtWidgets.QSpinBox()
         self.assignmentSpinBox.setRange(1, 99)
         self.assignmentSpinBox.setValue(1)
         self.assignmentSpinBox.setFixedWidth(50)
 
+        self.namegen_lastname_cb = QtWidgets.QCheckBox()
+        self.namegen_lastname_cb.setChecked(True)
         self.lastnameLineEdit = QtWidgets.QLineEdit()
         self.lastnameLineEdit.setPlaceholderText("Last Name")
 
+        self.namegen_firstname_cb = QtWidgets.QCheckBox()
+        self.namegen_firstname_cb.setChecked(True)
         self.firstnameLineEdit = QtWidgets.QLineEdit()
         self.firstnameLineEdit.setPlaceholderText("First Name")
 
+        self.namegen_versiontype_cb = QtWidgets.QCheckBox()
+        self.namegen_versiontype_cb.setChecked(True)
         self.versionTypeCombo = QtWidgets.QComboBox()
         self.versionTypeCombo.addItems(["wip", "final"])
 
+        self.namegen_versionnumber_cb = QtWidgets.QCheckBox()
+        self.namegen_versionnumber_cb.setChecked(True)
         self.versionNumberSpinBox = QtWidgets.QSpinBox()
         self.versionNumberSpinBox.setRange(1, 99)
         self.versionNumberSpinBox.setValue(1)
@@ -2081,6 +2105,42 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.resetNameGeneratorButton = QtWidgets.QPushButton("Reset")
 
         # End of Name Generator widgets
+
+        # --- Playblast quality (Maya-style) ---------------------------
+        # Scale (percent of render size): 10..100, default 100
+        self.scale_percent_sb = QtWidgets.QSpinBox()
+        self.scale_percent_sb.setRange(10, 100)
+        self.scale_percent_sb.setValue(100)
+        self.scale_percent_sb.setSuffix(" %")
+        self.scale_percent_sb.setMinimumWidth(spin_box_min_width)
+
+        # Image quality slider + mirrored spinbox (Maya's "Quality")
+        self.image_quality_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.image_quality_slider.setRange(0, 100)
+        self.image_quality_slider.setValue(100)
+        self.image_quality_slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        self.image_quality_slider.setTickInterval(25)
+
+        self.image_quality_sb = QtWidgets.QSpinBox()
+        self.image_quality_sb.setRange(0, 100)
+        self.image_quality_sb.setValue(100)
+        self.image_quality_sb.setMinimumWidth(spin_box_min_width)
+
+        # Frame padding (digits used in sequence file numbers)
+        self.frame_padding_sb = QtWidgets.QSpinBox()
+        self.frame_padding_sb.setRange(1, 8)
+        self.frame_padding_sb.setValue(PBCPlayblast.DEFAULT_PADDING)
+        self.frame_padding_sb.setMinimumWidth(spin_box_min_width)
+
+        # Display size mode - mirrors Maya's "Display Size" popup
+        self.display_size_cmb = QtWidgets.QComboBox()
+        self.display_size_cmb.setMinimumWidth(combo_box_min_width)
+        self.display_size_cmb.addItems([
+            "From Window",
+            "From Render Settings",
+            "Custom",
+        ])
+        self.display_size_cmb.setCurrentText("Custom")
 
         self.resolution_select_cmb = QtWidgets.QComboBox()
         self.resolution_select_cmb.setMinimumWidth(combo_box_min_width)
@@ -2417,6 +2477,29 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         return camera
 
     def _selected_resolution(self):
+        mode = self.display_size_cmb.currentText() if hasattr(self, "display_size_cmb") else "Custom"
+
+        if mode == "From Window":
+            # Use the active viewport panel's pixel size.
+            try:
+                panel = cmds.getPanel(withFocus=True) or ""
+                if panel and cmds.getPanel(typeOf=panel) == "modelPanel":
+                    w = cmds.control(panel, q=True, width=True)
+                    h = cmds.control(panel, q=True, height=True)
+                    if w and h:
+                        return int(w), int(h)
+            except Exception:
+                pass
+
+        if mode == "From Render Settings":
+            try:
+                w = int(cmds.getAttr("defaultResolution.width"))
+                h = int(cmds.getAttr("defaultResolution.height"))
+                if w and h:
+                    return w, h
+            except Exception:
+                pass
+
         if self.resolution_select_cmb.currentText() == "Custom":
             return self.resolution_width_sb.value(), self.resolution_height_sb.value()
 
@@ -2425,6 +2508,23 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             return int(width), int(height)
         except Exception:
             return self.resolution_width_sb.value(), self.resolution_height_sb.value()
+
+    def _on_display_size_changed(self):
+        """Enable/disable manual resolution inputs based on display-size mode."""
+        mode = self.display_size_cmb.currentText()
+        is_custom = (mode == "Custom")
+        # Only custom mode allows hand-edited width/height and preset combo.
+        self.resolution_select_cmb.setEnabled(is_custom)
+        self.resolution_width_sb.setEnabled(is_custom)
+        self.resolution_height_sb.setEnabled(is_custom)
+        # Reflect the new resolved size in the width/height boxes for visibility.
+        try:
+            w, h = self._selected_resolution()
+            if not is_custom:
+                self.resolution_width_sb.setValue(int(w))
+                self.resolution_height_sb.setValue(int(h))
+        except Exception:
+            pass
 
     def _selected_frame_range(self):
         preset = self.frame_range_cmb.currentText()
@@ -2447,13 +2547,20 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         return self.frame_range_start_sb.value(), self.frame_range_end_sb.value()
 
     def update_filename_preview(self):
-        filename = "A{0}_{1}_{2}_{3}_{4:02d}".format(
-            self.assignmentSpinBox.value(),
-            (self.lastnameLineEdit.text() or "LastName").strip(),
-            (self.firstnameLineEdit.text() or "FirstName").strip(),
-            self.versionTypeCombo.currentText(),
-            self.versionNumberSpinBox.value(),
-        )
+        parts = []
+        if self.namegen_assignment_cb.isChecked():
+            parts.append("A{0}".format(self.assignmentSpinBox.value()))
+        if self.namegen_lastname_cb.isChecked():
+            parts.append((self.lastnameLineEdit.text() or "LastName").strip())
+        if self.namegen_firstname_cb.isChecked():
+            parts.append((self.firstnameLineEdit.text() or "FirstName").strip())
+        if self.namegen_versiontype_cb.isChecked():
+            parts.append(self.versionTypeCombo.currentText())
+        if self.namegen_versionnumber_cb.isChecked():
+            parts.append("{0:02d}".format(self.versionNumberSpinBox.value()))
+
+        filename = "_".join(p for p in parts if p) or "playblast"
+
         container = self.encoding_container_cmb.currentText()
         if container == "Image":
             # For image sequences the extension is the codec, not the container.
@@ -2472,6 +2579,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.firstnameLineEdit.clear()
         self.versionTypeCombo.setCurrentIndex(0)
         self.versionNumberSpinBox.setValue(1)
+        for cb in (
+            self.namegen_assignment_cb,
+            self.namegen_lastname_cb,
+            self.namegen_firstname_cb,
+            self.namegen_versiontype_cb,
+            self.namegen_versionnumber_cb,
+        ):
+            cb.setChecked(True)
         self.update_filename_preview()
 
     def select_output_dir(self):
@@ -2562,7 +2677,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.execute(
                 output_dir=output_dir,
                 filename=filename,
-                padding=PBCPlayblast.DEFAULT_PADDING,
+                padding=self.frame_padding_sb.value(),
                 overscan=self.overscan_cb.isChecked(),
                 show_ornaments=self.ornaments_cb.isChecked(),
                 show_in_viewer=self.viewer_cb.isChecked(),
@@ -2571,6 +2686,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 camera_override=self._active_camera_override(),
                 enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
                 include_sound=self.sound_enable_cb.isChecked(),
+                scale_percent=self.scale_percent_sb.value(),
+                image_quality_override=self.image_quality_sb.value(),
             )
         except Exception:
             traceback.print_exc()
@@ -2597,7 +2714,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.execute(
                 output_dir=preview_dir,
                 filename=preview_name,
-                padding=PBCPlayblast.DEFAULT_PADDING,
+                padding=self.frame_padding_sb.value(),
                 overscan=self.overscan_cb.isChecked(),
                 show_ornaments=self.ornaments_cb.isChecked(),
                 show_in_viewer=True,
@@ -2606,6 +2723,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 camera_override=self._active_camera_override(),
                 enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
                 include_sound=self.sound_enable_cb.isChecked(),
+                scale_percent=self.scale_percent_sb.value(),
+                image_quality_override=self.image_quality_sb.value(),
             )
             self.on_log_output("Preview playblast created in temp folder: {0}".format(preview_dir))
         except Exception:
@@ -2676,6 +2795,19 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.versionTypeCombo.currentIndexChanged.connect(self.update_filename_preview)
         self.versionNumberSpinBox.valueChanged.connect(self.update_filename_preview)
 
+        # Name-generator include/exclude checkboxes
+        self.namegen_assignment_cb.toggled.connect(self.update_filename_preview)
+        self.namegen_lastname_cb.toggled.connect(self.update_filename_preview)
+        self.namegen_firstname_cb.toggled.connect(self.update_filename_preview)
+        self.namegen_versiontype_cb.toggled.connect(self.update_filename_preview)
+        self.namegen_versionnumber_cb.toggled.connect(self.update_filename_preview)
+
+        # Quality widgets: keep slider and spinbox in sync, and react to
+        # display-size-mode changes.
+        self.image_quality_slider.valueChanged.connect(self.image_quality_sb.setValue)
+        self.image_quality_sb.valueChanged.connect(self.image_quality_slider.setValue)
+        self.display_size_cmb.currentIndexChanged.connect(self._on_display_size_changed)
+
         self.preview_btn.clicked.connect(self.on_preview)
         self.execute_btn.clicked.connect(self.on_execute)
         self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
@@ -2699,6 +2831,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         width, height = self._playblast.preset_to_resolution(self.resolution_select_cmb.currentText())
         self.resolution_width_sb.setValue(width)
         self.resolution_height_sb.setValue(height)
+
+        # Sync enable-state of resolution inputs with the display-size mode.
+        self._on_display_size_changed()
 
         self.tool_ffmpeg_path_le.setText(PBCPlayblastUtils.get_ffmpeg_path())
         temp_dir = PBCPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
@@ -2867,21 +3002,27 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         # Name generator
         name_gen_card, name_gen_body = self._card("Name Generator")
         name_gen_grid = QtWidgets.QGridLayout()
-        name_gen_grid.setColumnStretch(2, 1)
+        name_gen_grid.setColumnStretch(3, 1)
         name_gen_grid.setVerticalSpacing(6)
         name_gen_grid.setHorizontalSpacing(8)
-        name_gen_grid.addWidget(QtWidgets.QLabel("Assignment:"), 0, 0)
-        name_gen_grid.addWidget(self.assignmentSpinBox, 0, 1)
-        name_gen_grid.addWidget(QtWidgets.QLabel("Last Name:"), 1, 0)
-        name_gen_grid.addWidget(self.lastnameLineEdit, 1, 1, 1, 2)
-        name_gen_grid.addWidget(QtWidgets.QLabel("First Name:"), 2, 0)
-        name_gen_grid.addWidget(self.firstnameLineEdit, 2, 1, 1, 2)
-        name_gen_grid.addWidget(QtWidgets.QLabel("Type:"), 3, 0)
-        name_gen_grid.addWidget(self.versionTypeCombo, 3, 1)
-        name_gen_grid.addWidget(QtWidgets.QLabel("Version:"), 4, 0)
-        name_gen_grid.addWidget(self.versionNumberSpinBox, 4, 1)
-        name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 5, 0)
-        name_gen_grid.addWidget(self.filenamePreviewLabel, 5, 1, 1, 2)
+        # Column layout: [include?] [label:] [value] [value-wide]
+        name_gen_grid.addWidget(self.namegen_assignment_cb, 0, 0)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Assignment:"), 0, 1)
+        name_gen_grid.addWidget(self.assignmentSpinBox, 0, 2)
+        name_gen_grid.addWidget(self.namegen_lastname_cb, 1, 0)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Last Name:"), 1, 1)
+        name_gen_grid.addWidget(self.lastnameLineEdit, 1, 2, 1, 2)
+        name_gen_grid.addWidget(self.namegen_firstname_cb, 2, 0)
+        name_gen_grid.addWidget(QtWidgets.QLabel("First Name:"), 2, 1)
+        name_gen_grid.addWidget(self.firstnameLineEdit, 2, 2, 1, 2)
+        name_gen_grid.addWidget(self.namegen_versiontype_cb, 3, 0)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Type:"), 3, 1)
+        name_gen_grid.addWidget(self.versionTypeCombo, 3, 2)
+        name_gen_grid.addWidget(self.namegen_versionnumber_cb, 4, 0)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Version:"), 4, 1)
+        name_gen_grid.addWidget(self.versionNumberSpinBox, 4, 2)
+        name_gen_grid.addWidget(QtWidgets.QLabel("Preview:"), 5, 1)
+        name_gen_grid.addWidget(self.filenamePreviewLabel, 5, 2, 1, 2)
 
         name_gen_btns = QtWidgets.QHBoxLayout()
         name_gen_btns.addStretch()
@@ -2932,6 +3073,37 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         resolution_row.addWidget(self.resolution_height_sb)
         resolution_row.addStretch()
         resolution_body.addLayout(resolution_row)
+
+        # Quality card - mirrors Maya's Playblast Options quality block.
+        quality_card, quality_body = self._card("Quality")
+        quality_form = PBCFormLayout()
+        quality_form.setVerticalSpacing(8)
+
+        display_size_row = QtWidgets.QHBoxLayout()
+        display_size_row.setSpacing(4)
+        display_size_row.addWidget(self.display_size_cmb)
+        display_size_row.addStretch()
+        quality_form.addLayoutRow(0, "Display Size:", display_size_row)
+
+        scale_row = QtWidgets.QHBoxLayout()
+        scale_row.setSpacing(4)
+        scale_row.addWidget(self.scale_percent_sb)
+        scale_row.addStretch()
+        quality_form.addLayoutRow(1, "Scale:", scale_row)
+
+        image_quality_row = QtWidgets.QHBoxLayout()
+        image_quality_row.setSpacing(6)
+        image_quality_row.addWidget(self.image_quality_slider, 1)
+        image_quality_row.addWidget(self.image_quality_sb)
+        quality_form.addLayoutRow(2, "Quality:", image_quality_row)
+
+        padding_row = QtWidgets.QHBoxLayout()
+        padding_row.setSpacing(4)
+        padding_row.addWidget(self.frame_padding_sb)
+        padding_row.addStretch()
+        quality_form.addLayoutRow(3, "Frame Padding:", padding_row)
+
+        quality_body.addLayout(quality_form)
 
         # Frame range card
         frame_range_card, frame_range_body = self._card("Frame Range")
@@ -2989,6 +3161,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         ))
         tab_layout.addWidget(camera_card)
         tab_layout.addWidget(resolution_card)
+        tab_layout.addWidget(quality_card)
         tab_layout.addWidget(frame_range_card)
         tab_layout.addWidget(visibility_card)
         tab_layout.addWidget(audio_card)
@@ -3287,6 +3460,21 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.versionNumberSpinBox.setToolTip(
             "Version number, zero-padded to two digits (e.g. 01, 02)."
         )
+        self.namegen_assignment_cb.setToolTip(
+            "Include the assignment prefix (e.g. A1) in the generated filename."
+        )
+        self.namegen_lastname_cb.setToolTip(
+            "Include your last name in the generated filename."
+        )
+        self.namegen_firstname_cb.setToolTip(
+            "Include your first name in the generated filename."
+        )
+        self.namegen_versiontype_cb.setToolTip(
+            "Include the version type (wip / final) in the generated filename."
+        )
+        self.namegen_versionnumber_cb.setToolTip(
+            "Include the version number (01, 02, ...) in the generated filename."
+        )
         self.filenamePreviewLabel.setToolTip(
             "Live preview of the generated filename."
         )
@@ -3312,6 +3500,27 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         )
         self.resolution_width_sb.setToolTip("Output image width in pixels.")
         self.resolution_height_sb.setToolTip("Output image height in pixels.")
+
+        self.display_size_cmb.setToolTip(
+            "How the output size is determined (matches Maya's Playblast\n"
+            "Options 'Display Size' popup):\n"
+            "  From Window          - match the focused viewport's size\n"
+            "  From Render Settings - match defaultResolution width/height\n"
+            "  Custom               - use the Resolution controls above"
+        )
+        self.scale_percent_sb.setToolTip(
+            "Render size as a percentage of the resolution above. 100 % is\n"
+            "full size; lower values downscale for faster previews."
+        )
+        self.image_quality_slider.setToolTip(
+            "Compression quality for the playblast frames (0-100).\n"
+            "100 = maximum quality / largest file; lower values compress more."
+        )
+        self.image_quality_sb.setToolTip(self.image_quality_slider.toolTip())
+        self.frame_padding_sb.setToolTip(
+            "Number of digits used to number image-sequence frames\n"
+            "(e.g. 4 -> 0001, 0002, ...). Maya default is 4."
+        )
         self.frame_range_cmb.setToolTip(
             "Frames to render:\n"
             "  Animation  - scene's animation start/end\n"
