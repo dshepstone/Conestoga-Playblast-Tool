@@ -3101,7 +3101,46 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 pass
         return super(PBCPlayblastWidget, self).eventFilter(obj, event)
 
+    def apply_visibility_preset(self):
+        """Push the visibility preset currently selected in the
+        dropdown into self._playblast. Must run BEFORE
+        apply_quick_viewport_toggles so the NURBS override still
+        wins over the preset's default.
+
+        "Viewport" -> mirror the active viewport (empty list tells
+        PBCPlayblast.get_visibility() to query modelEditor live).
+        "Custom"   -> whatever the Customize... dialog last saved.
+        Anything else -> resolve via preset_to_visibility().
+        """
+        preset = self.visibility_cmb.currentText() if hasattr(self, "visibility_cmb") else ""
+
+        if preset == "Custom":
+            if self._visibility_dialog is not None:
+                data = self._visibility_dialog.get_visibility_data()
+                self._playblast.set_visibility(list(data))
+            else:
+                # No custom data saved yet - fall back to live viewport.
+                self._playblast.set_visibility([])
+            return
+
+        if preset == "Viewport" or not preset:
+            # Empty list makes PBCPlayblast.get_visibility() snapshot
+            # the active viewport at playblast time.
+            self._playblast.set_visibility([])
+            return
+
+        data = self._playblast.preset_to_visibility(preset)
+        if data is None:
+            self._playblast.set_visibility([])
+        else:
+            self._playblast.set_visibility(data)
+
     def apply_quick_viewport_toggles(self):
+        # If the dropdown says "Viewport", get_visibility() returns
+        # a live snapshot of the viewport. For named presets and
+        # "Custom", it returns the stored list we just set in
+        # apply_visibility_preset(). Either way, start from there
+        # and overlay the two NURBS override checkboxes.
         visibility_data = list(self._playblast.get_visibility())
         name_to_index = {
             item[0]: i
@@ -3114,6 +3153,35 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             visibility_data[name_to_index["NURBS Surfaces"]] = self.nurbs_surfaces_cb.isChecked()
 
         self._playblast.set_visibility(visibility_data)
+
+    def open_visibility_customize_dialog(self):
+        """Show the Customize Visibility dialog, seeded with the
+        current effective visibility data. On Apply, store the
+        result and switch the dropdown to "Custom" so the next
+        playblast uses it.
+        """
+        if self._visibility_dialog is None:
+            self._visibility_dialog = PBCVisibilityDialog(self)
+
+        # Seed the dialog with whatever the user would get right now
+        # (the selected preset, or the live viewport).
+        preset = self.visibility_cmb.currentText() if hasattr(self, "visibility_cmb") else ""
+        if preset == "Custom":
+            seed = self._visibility_dialog.get_visibility_data()
+        elif preset == "Viewport" or not preset:
+            seed = self._playblast.get_viewport_visibility()
+        else:
+            seed = self._playblast.preset_to_visibility(preset) or []
+
+        if seed and len(seed) == len(self._visibility_dialog.visibility_checkboxes):
+            self._visibility_dialog.set_visibility_data(seed)
+
+        if self._visibility_dialog.exec_() == QtWidgets.QDialog.Accepted:
+            # Force dropdown to "Custom" so the next blast picks up
+            # the dialog's selections via apply_visibility_preset().
+            idx = self.visibility_cmb.findText("Custom")
+            if idx >= 0:
+                self.visibility_cmb.setCurrentIndex(idx)
 
     def on_execute(self):
         """Build the final playblast and save it to the output folder
@@ -3164,6 +3232,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_encoding(container, codec)
 
             self._playblast.set_camera(self._active_camera_override() or None)
+            self.apply_visibility_preset()
             self.apply_quick_viewport_toggles()
 
             self._run_playblast(
@@ -3209,6 +3278,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_frame_range((current_time, current_time))
 
             self._playblast.set_camera(self._active_camera_override() or None)
+            self.apply_visibility_preset()
             self.apply_quick_viewport_toggles()
             container = self.encoding_container_cmb.currentText()
             codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
@@ -3630,6 +3700,18 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.tool_temp_dir_browse_btn.clicked.connect(self.browse_temp_output_dir)
         self.tool_apply_btn.clicked.connect(self.apply_tool_tab_settings)
         self._playblast.output_logged.connect(self.on_log_output)
+
+        # Visibility: apply the preset picked in the dropdown to the
+        # playblast engine the moment the user changes it, so the next
+        # Preview / Create Playblast honours the new selection. The
+        # Customize button opens the per-type dialog and switches the
+        # dropdown to "Custom" on Apply.
+        self.visibility_cmb.currentIndexChanged.connect(
+            lambda _idx: self.apply_visibility_preset()
+        )
+        self.visibility_customize_btn.clicked.connect(
+            self.open_visibility_customize_dialog
+        )
 
         # Auto-adjust the window height whenever the user switches tabs so
         # the frame hugs the content of the active tab.
