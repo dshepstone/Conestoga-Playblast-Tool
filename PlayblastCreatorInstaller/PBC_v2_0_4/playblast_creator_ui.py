@@ -1111,7 +1111,7 @@ class PBCPlayblast(QtCore.QObject):
             "quality": self._image_quality,
         }
 
-    def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False):
+    def execute(self, output_dir, filename, padding=4, overscan=False, show_ornaments=True, show_in_viewer=True, offscreen=False, overwrite=False, camera_override="", enable_camera_frame_range=False, include_sound=True):
 
         ffmpeg_path = PBCPlayblastUtils.get_ffmpeg_path()
         if self.requires_ffmpeg() and not self.validate_ffmpeg(ffmpeg_path):
@@ -1230,7 +1230,10 @@ class PBCPlayblast(QtCore.QObject):
             "offScreen": offscreen
         }
 
-        if temp_file_is_movie:
+        # Only forward sound to Maya when the user opted in AND the
+        # temp format can actually carry audio (i.e. movie, not an
+        # image sequence).
+        if temp_file_is_movie and include_sound:
             if self.use_trax_sounds():
                 options["useTraxSounds"] = True
             else:
@@ -1283,9 +1286,9 @@ class PBCPlayblast(QtCore.QObject):
 
             if self._encoder in ("h264", "mpeg4", "prores"):
                 if temp_file_is_movie:
-                    self.transcode_video(self._encoder, ffmpeg_path, source_path, output_path)
+                    self.transcode_video(self._encoder, ffmpeg_path, source_path, output_path, include_audio=include_sound)
                 else:
-                    self.encode_video(self._encoder, ffmpeg_path, source_path, output_path, start_frame)
+                    self.encode_video(self._encoder, ffmpeg_path, source_path, output_path, start_frame, include_audio=include_sound)
             else:
                 self.log_error("Encoding failed. Unsupported encoder ({0}) for container ({1}).".format(self._encoder, self._container_format))
                 self.remove_temp_dir(playblast_output_dir, temp_file_extension)
@@ -1418,16 +1421,26 @@ class PBCPlayblast(QtCore.QObject):
         self.log_output(output)
 
 
-    def encode_video(self, encoder, ffmpeg_path, source_path, output_path, start_frame):
-        """Encode an image sequence into a video using the given encoder."""
+    def encode_video(self, encoder, ffmpeg_path, source_path, output_path, start_frame, include_audio=True):
+        """Encode an image sequence into a video using the given encoder.
+
+        When include_audio is False the timeline sound node is ignored
+        and the resulting file is silent.
+        """
         self.log_output("Starting {0} encoding...".format(encoder))
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
         framerate = self.get_frame_rate()
 
-        audio_file_path, audio_frame_offset = self.get_audio_attributes()
-        if audio_file_path:
-            audio_offset = self.get_audio_offset_in_sec(start_frame, audio_frame_offset, framerate)
+        audio_file_path = None
+        audio_offset = 0.0
+        if include_audio:
+            audio_file_path, audio_frame_offset = self.get_audio_attributes()
+            if audio_file_path:
+                audio_offset = self.get_audio_offset_in_sec(start_frame, audio_frame_offset, framerate)
+                self.log_output("Including timeline audio: {0}".format(audio_file_path))
+        else:
+            self.log_output("Audio disabled by user - output will be silent.")
 
         crf = PBCPlayblast.H264_QUALITIES[self._h264_quality]
         preset = self._h264_preset
@@ -1444,6 +1457,8 @@ class PBCPlayblast(QtCore.QObject):
 
         if audio_file_path:
             arguments.extend(["-filter_complex", "[1:0] apad", "-shortest"])
+        elif not include_audio:
+            arguments.append("-an")
 
         arguments.append(output_path)
 
@@ -1451,8 +1466,14 @@ class PBCPlayblast(QtCore.QObject):
 
         self.execute_ffmpeg_command(ffmpeg_path, arguments)
 
-    def transcode_video(self, encoder, ffmpeg_path, source_path, output_path):
-        """Transcode a video temp file into the final container/codec."""
+    def transcode_video(self, encoder, ffmpeg_path, source_path, output_path, include_audio=True):
+        """Transcode a video temp file into the final container/codec.
+
+        When include_audio is True the audio stream from the input file
+        (if any) is re-encoded to AAC so it carries through to the
+        final mp4/mov. `-map 0:a?` makes the audio stream optional, so
+        the command still succeeds if the temp file has no audio.
+        """
         self.log_output("Starting {0} transcoding...".format(encoder))
         self.log_output("ffmpeg path: {0}".format(ffmpeg_path))
 
@@ -1464,6 +1485,17 @@ class PBCPlayblast(QtCore.QObject):
         arguments.append("-y")
         arguments.extend(["-i", source_path])
         arguments.extend(video_codec_args)
+
+        if include_audio:
+            arguments.extend([
+                "-map", "0:v",
+                "-map", "0:a?",
+                "-c:a", "aac",
+                "-b:a", "192k",
+            ])
+        else:
+            arguments.append("-an")
+
         arguments.append(output_path)
 
         self.log_output("ffmpeg arguments: {0}\n".format(arguments))
@@ -1472,11 +1504,11 @@ class PBCPlayblast(QtCore.QObject):
 
     # Backwards-compatible wrappers so any external script referencing
     # the older names keeps working.
-    def encode_h264(self, ffmpeg_path, source_path, output_path, start_frame):
-        return self.encode_video("h264", ffmpeg_path, source_path, output_path, start_frame)
+    def encode_h264(self, ffmpeg_path, source_path, output_path, start_frame, include_audio=True):
+        return self.encode_video("h264", ffmpeg_path, source_path, output_path, start_frame, include_audio=include_audio)
 
-    def transcode_h264(self, ffmpeg_path, source_path, output_path):
-        return self.transcode_video("h264", ffmpeg_path, source_path, output_path)
+    def transcode_h264(self, ffmpeg_path, source_path, output_path, include_audio=True):
+        return self.transcode_video("h264", ffmpeg_path, source_path, output_path, include_audio=include_audio)
 
 
     def get_frame_rate(self):
@@ -2133,6 +2165,20 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.nurbs_surfaces_cb = QtWidgets.QCheckBox("NURBS Surfaces")
         self.nurbs_surfaces_cb.setChecked(True)
 
+        # --- Audio -----------------------------------------------------
+        self.sound_enable_cb = QtWidgets.QCheckBox("Include Sound")
+        self.sound_enable_cb.setChecked(True)
+
+        self.sound_refresh_btn = QtWidgets.QPushButton("Refresh")
+        self.sound_refresh_btn.setMaximumWidth(int(80 * scale_value))
+        self.sound_refresh_btn.setFixedHeight(button_height)
+
+        self.sound_status_label = QtWidgets.QLabel("")
+        self.sound_status_label.setWordWrap(True)
+        self.sound_status_label.setStyleSheet(
+            "color: #9A9A9A; font-size: 11px; padding: 2px 2px;"
+        )
+
         self.output_edit = QtWidgets.QPlainTextEdit()
         self.output_edit.setFocusPolicy(QtCore.Qt.NoFocus)
         self.output_edit.setReadOnly(True)
@@ -2309,6 +2355,61 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.encoding_status_label.setText(text)
         self.encoding_status_label.setWordWrap(True)
 
+    def refresh_sound_status(self):
+        """Preview what audio (if any) will end up in the final playblast.
+
+        Reads Maya's timeline control for the current sound node + Trax
+        state, then sets a coloured status line beneath the Include
+        Sound checkbox so students know ahead of time whether their
+        export will be silent.
+        """
+        if not hasattr(self, "sound_status_label"):
+            return
+
+        sound_node = None
+        use_trax = False
+        try:
+            sound_node = self._playblast.get_sound_node()
+            use_trax = self._playblast.display_sound() and not sound_node
+        except Exception:
+            pass
+
+        container = self.encoding_container_cmb.currentText()
+        image_container = (container == "Image")
+
+        if image_container:
+            text = "Image sequences cannot carry audio - sound will be skipped."
+            color = "#E6A23C"
+        elif not self.sound_enable_cb.isChecked():
+            text = "Sound is disabled - playblast will have no audio."
+            color = "#9A9A9A"
+        elif sound_node:
+            file_name = ""
+            try:
+                file_path = cmds.getAttr("{0}.filename".format(sound_node)) or ""
+                file_name = os.path.basename(file_path)
+            except Exception:
+                pass
+            if file_name:
+                text = "Will embed timeline sound: '{0}' ({1}).".format(sound_node, file_name)
+            else:
+                text = "Will embed timeline sound: '{0}'.".format(sound_node)
+            color = "#7FC97F"
+        elif use_trax:
+            text = "No sound node on the timeline - Trax sounds will be used."
+            color = "#7FC97F"
+        else:
+            text = (
+                "No sound node on the timeline. Drag an audio file onto "
+                "the timeline (right-click -> Audio) to add one."
+            )
+            color = "#9A9A9A"
+
+        self.sound_status_label.setText(text)
+        self.sound_status_label.setStyleSheet(
+            "color: {0}; font-size: 11px; padding: 2px 2px;".format(color)
+        )
+
     def _active_camera_override(self):
         camera = self.camera_select_cmb.currentText()
         if not camera or camera == "Active":
@@ -2469,6 +2570,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 overwrite=self.force_overwrite_cb.isChecked(),
                 camera_override=self._active_camera_override(),
                 enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+                include_sound=self.sound_enable_cb.isChecked(),
             )
         except Exception:
             traceback.print_exc()
@@ -2503,6 +2605,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 overwrite=True,
                 camera_override=self._active_camera_override(),
                 enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+                include_sound=self.sound_enable_cb.isChecked(),
             )
             self.on_log_output("Preview playblast created in temp folder: {0}".format(preview_dir))
         except Exception:
@@ -2558,7 +2661,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.camera_select_hide_defaults_cb.toggled.connect(self.refresh_cameras)
         self.encoding_container_cmb.currentIndexChanged.connect(self.refresh_encoding_codecs)
         self.encoding_container_cmb.currentIndexChanged.connect(self.update_filename_preview)
+        self.encoding_container_cmb.currentIndexChanged.connect(self.refresh_sound_status)
         self.encoding_video_codec_cmb.currentIndexChanged.connect(self.update_filename_preview)
+
+        self.sound_enable_cb.toggled.connect(self.refresh_sound_status)
+        self.sound_refresh_btn.clicked.connect(self.refresh_sound_status)
 
         self.generateFilenameButton.clicked.connect(self.apply_generated_filename)
         self.resetNameGeneratorButton.clicked.connect(self.reset_name_generator)
@@ -2583,6 +2690,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.refresh_cameras()
         self.refresh_encoding_codecs()
         self.update_filename_preview()
+        self.refresh_sound_status()
 
         start_frame, end_frame = self._selected_frame_range()
         self.frame_range_start_sb.setValue(start_frame)
@@ -2845,6 +2953,15 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         visibility_row.addStretch()
         visibility_body.addLayout(visibility_row)
 
+        # Audio card
+        audio_card, audio_body = self._card("Audio")
+        audio_row = QtWidgets.QHBoxLayout()
+        audio_row.addWidget(self.sound_enable_cb)
+        audio_row.addStretch()
+        audio_row.addWidget(self.sound_refresh_btn)
+        audio_body.addLayout(audio_row)
+        audio_body.addWidget(self.sound_status_label)
+
         # Flags card
         flags_card, flags_body = self._card("Options")
         flags_grid = QtWidgets.QGridLayout()
@@ -2866,13 +2983,15 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tab_layout.setSpacing(10)
         tab_layout.addWidget(self._help_caption(
             "Controls what Maya renders into the playblast: which camera, "
-            "image size, frame range, and which scene elements are visible. "
-            "These settings match Maya's standard playblast options."
+            "image size, frame range, which scene elements are visible, "
+            "and whether timeline audio is included. These settings match "
+            "Maya's standard playblast options."
         ))
         tab_layout.addWidget(camera_card)
         tab_layout.addWidget(resolution_card)
         tab_layout.addWidget(frame_range_card)
         tab_layout.addWidget(visibility_card)
+        tab_layout.addWidget(audio_card)
         tab_layout.addWidget(flags_card)
         tab_layout.addStretch()
 
@@ -3241,6 +3360,16 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         )
         self.nurbs_surfaces_cb.setToolTip(
             "Show NURBS surfaces in the playblast."
+        )
+
+        self.sound_enable_cb.setToolTip(
+            "Include the timeline's sound node in the final playblast.\n"
+            "Only applies to movie containers (mp4, mov) - image "
+            "sequences cannot carry audio."
+        )
+        self.sound_refresh_btn.setToolTip(
+            "Re-check Maya's timeline for a sound node and update the "
+            "status line below."
         )
 
         # --- Encoding tab ---------------------------------------------
