@@ -1994,6 +1994,10 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self._encoder_settings_dialog = None
         self._visibility_dialog = None
 
+        # Last shot-mask line edit the user focused - used so the Tokens
+        # "Insert Item" button knows which of the six fields to insert into.
+        self._last_focused_sm_le = None
+
         self.create_widgets()
         self.create_layouts()
         self.create_connections()
@@ -2628,13 +2632,113 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         if generated:
             self.sm_top_center_le.setText(generated)
 
+    def _populate_shot_mask_tokens(self, combo):
+        """Fill the shot-mask Tokens combo with two grouped sections:
+        general tokens (resolved by the mask node) and Animation Pass
+        labels (inserted as plain text).
+        """
+        # QtGui is imported at the top for whichever Qt binding is in use.
+        model = QtGui.QStandardItemModel(combo)
+
+        def _header(title):
+            item = QtGui.QStandardItem("\u2500\u2500 {0} \u2500\u2500".format(title))
+            item.setFlags(QtCore.Qt.NoItemFlags)  # non-selectable separator
+            font = item.font()
+            font.setBold(True)
+            item.setFont(font)
+            item.setData(None, QtCore.Qt.UserRole)
+            model.appendRow(item)
+
+        def _entry(label, token):
+            item = QtGui.QStandardItem(label)
+            item.setData(token, QtCore.Qt.UserRole)
+            model.appendRow(item)
+
+        _header("General")
+        for label, token in (
+            ("Frame Counter", "{counter}"),
+            ("FPS", "{fps}"),
+            ("Camera", "{camera}"),
+            ("Shot #", "{shot}"),
+            ("Scene", "{scene}"),
+            ("Date", "{date}"),
+            ("Username", "{username}"),
+        ):
+            _entry(label, token)
+
+        _header("Animation Pass")
+        for label in (
+            "Planning",
+            "Blocking",
+            "Blocking Plus",
+            "Spline Pass",
+            "Facial/Lip-Sync",
+            "Polish",
+        ):
+            # Animation passes are literal text labels, not templates.
+            _entry(label, label)
+
+        combo.setModel(model)
+
+        # Select the first real token (skip the leading header row).
+        for row in range(model.rowCount()):
+            if model.item(row).flags() & QtCore.Qt.ItemIsSelectable:
+                combo.setCurrentIndex(row)
+                break
+
+    def _selected_token(self):
+        """Return the token string for the currently-selected combo row,
+        regardless of whether the row is a header (no UserRole data).
+        """
+        idx = self.sm_common_items_cmb.currentIndex()
+        model = self.sm_common_items_cmb.model()
+        if idx < 0 or not model:
+            return ""
+        item = model.item(idx) if hasattr(model, "item") else None
+        if item is None:
+            # Fallback for plain QComboBox models.
+            return self.sm_common_items_cmb.currentData() or ""
+        return item.data(QtCore.Qt.UserRole) or ""
+
     def insert_shotmask_token(self):
-        token = self.sm_common_items_cmb.currentData()
+        token = self._selected_token()
         if not token:
             return
+        target = self._last_focused_sm_le
+        # Fallback to the currently-focused widget if the user happens to
+        # be typing in a shot-mask field when they click Insert Item.
         focus = QtWidgets.QApplication.focusWidget()
-        if isinstance(focus, QtWidgets.QLineEdit):
-            focus.insert(token)
+        if isinstance(focus, QtWidgets.QLineEdit) and focus in self._shot_mask_line_edits():
+            target = focus
+        if target is None:
+            target = self.sm_top_center_le
+        target.insert(token)
+        target.setFocus(QtCore.Qt.OtherFocusReason)
+
+    def _shot_mask_line_edits(self):
+        return (
+            self.sm_top_left_le,
+            self.sm_top_center_le,
+            self.sm_top_right_le,
+            self.sm_bottom_left_le,
+            self.sm_bottom_center_le,
+            self.sm_bottom_right_le,
+        )
+
+    def _on_shot_mask_field_focused(self, line_edit):
+        self._last_focused_sm_le = line_edit
+
+    def eventFilter(self, obj, event):
+        # Remember which shot-mask field is currently focused so that
+        # Tokens -> Insert Item always has a sensible target, even after
+        # focus shifts to the combo or the Insert button.
+        if event.type() == QtCore.QEvent.FocusIn:
+            try:
+                if obj in self._shot_mask_line_edits():
+                    self._last_focused_sm_le = obj
+            except Exception:
+                pass
+        return super(PBCPlayblastWidget, self).eventFilter(obj, event)
 
     def apply_quick_viewport_toggles(self):
         visibility_data = list(self._playblast.get_visibility())
@@ -2674,6 +2778,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_quick_viewport_toggles()
 
+            # Pin the shot mask to the camera we're about to blast.
+            self._sync_shot_mask_to_camera(self._resolve_playblast_camera())
+
             self._playblast.execute(
                 output_dir=output_dir,
                 filename=filename,
@@ -2711,6 +2818,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
 
+            # Pin the shot mask to the camera we're about to blast.
+            self._sync_shot_mask_to_camera(self._resolve_playblast_camera())
+
             self._playblast.execute(
                 output_dir=preview_dir,
                 filename=preview_name,
@@ -2730,6 +2840,58 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         except Exception:
             traceback.print_exc()
             self.on_log_output("[Error] Preview playblast failed. See Script Editor for details.")
+
+    def _resolve_playblast_camera(self):
+        """Return the camera transform name the playblast will use.
+
+        Matches the resolution that PBCPlayblast.execute performs: the
+        UI override wins, otherwise whatever camera is active in the
+        focused viewport.
+        """
+        override = self._active_camera_override()
+        if override:
+            return override
+        try:
+            panel = cmds.getPanel(withFocus=True) or ""
+            if panel and cmds.getPanel(typeOf=panel) == "modelPanel":
+                cam = cmds.modelPanel(panel, q=True, camera=True)
+                if cam:
+                    return cam
+        except Exception:
+            pass
+        return ""
+
+    def _sync_shot_mask_to_camera(self, camera_name):
+        """Point the shot-mask node(s) at the supplied camera and toggle
+        their visibility to match the Render tab's Shot Mask checkbox.
+
+        Without this, the mask would either always render on every camera
+        or keep the camera it was last bound to - not necessarily the one
+        the user just picked for the playblast.
+        """
+        try:
+            nodes = cmds.ls(type="PlayblastCreatorShotMask") or []
+            if not nodes:
+                return
+            enabled = self.shot_mask_cb.isChecked()
+            cam_value = camera_name or ""
+            for node in nodes:
+                if cmds.attributeQuery("camera", node=node, exists=True):
+                    try:
+                        cmds.setAttr("{0}.camera".format(node), cam_value, type="string")
+                    except RuntimeError:
+                        pass
+                # Toggle the locator transform so the draw override stops
+                # running when the user disables the mask.
+                parents = cmds.listRelatives(node, parent=True, fullPath=True) or [node]
+                for parent in parents:
+                    if cmds.attributeQuery("visibility", node=parent, exists=True):
+                        try:
+                            cmds.setAttr("{0}.visibility".format(parent), enabled)
+                        except RuntimeError:
+                            pass
+        except Exception:
+            traceback.print_exc()
 
     def apply_shot_mask_tab_settings(self):
         try:
@@ -2751,6 +2913,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             cmds.setAttr("{0}.counterPadding".format(mask), self.sm_counter_padding_sb.value())
 
             self.shot_mask_cb.setChecked(self.sm_enable_mask_cb.isChecked())
+
+            # Bind the mask to whatever camera the user has selected on
+            # the Render tab so the overlay actually appears on that view.
+            self._sync_shot_mask_to_camera(self._resolve_playblast_camera())
+
             self.on_log_output("Shot mask settings applied to: {0}".format(mask))
         except Exception:
             traceback.print_exc()
@@ -2813,6 +2980,26 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
         self.sm_use_namegen_btn.clicked.connect(self.use_namegen_for_shotmask)
         self.sm_insert_item_btn.clicked.connect(self.insert_shotmask_token)
+
+        # Track which shot-mask field the user focused most recently so
+        # "Insert Item" targets the correct one even after the combo or
+        # button steals focus.
+        for le in self._shot_mask_line_edits():
+            le.installEventFilter(self)
+
+        # Show / hide the mask in the viewport the moment the user toggles
+        # the checkbox, without waiting for the next playblast.
+        self.shot_mask_cb.toggled.connect(
+            lambda _checked: self._sync_shot_mask_to_camera(
+                self._resolve_playblast_camera()
+            )
+        )
+        # Re-bind to the new camera immediately when the user changes it.
+        self.camera_select_cmb.currentIndexChanged.connect(
+            lambda _idx: self._sync_shot_mask_to_camera(
+                self._resolve_playblast_camera()
+            )
+        )
         self.tool_ffmpeg_browse_btn.clicked.connect(self.browse_ffmpeg_path)
         self.tool_temp_dir_browse_btn.clicked.connect(self.browse_temp_output_dir)
         self.tool_apply_btn.clicked.connect(self.apply_tool_tab_settings)
@@ -3241,17 +3428,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.sm_bottom_center_le = QtWidgets.QLineEdit()
         self.sm_bottom_right_le = QtWidgets.QLineEdit()
 
+        # Default target for Token inserts until the user clicks into a
+        # specific slot; Top Center matches Maya's default mask layout.
+        self._last_focused_sm_le = self.sm_top_center_le
+
         self.sm_common_items_cmb = QtWidgets.QComboBox()
-        for label, token in (
-            ("Frame Counter", "{counter}"),
-            ("FPS", "{fps}"),
-            ("Camera", "{camera}"),
-            ("Shot #", "{shot}"),
-            ("Scene", "{scene}"),
-            ("Date", "{date}"),
-            ("Username", "{username}"),
-        ):
-            self.sm_common_items_cmb.addItem(label, token)
+        # Build a grouped token model so Animation Pass sits visually under
+        # its own header, and the "General" section keeps the existing items.
+        self._populate_shot_mask_tokens(self.sm_common_items_cmb)
         self.sm_insert_item_btn = QtWidgets.QPushButton("Insert Item")
 
         self.sm_counter_padding_sb = QtWidgets.QSpinBox()
@@ -3639,7 +3823,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             check_box.setToolTip(show_tip)
 
         self.sm_common_items_cmb.setToolTip(
-            "Pre-built dynamic values you can insert into any label slot."
+            "Pre-built values you can insert into any label slot.\n"
+            "  General tokens (e.g. {scene}, {camera}) are resolved live\n"
+            "  by the shot mask at render time.\n"
+            "  Animation Pass entries (Blocking, Polish, ...) are inserted\n"
+            "  as plain text for quick submission labelling."
         )
         self.sm_insert_item_btn.setToolTip(
             "Insert the selected token into whichever label field you "
