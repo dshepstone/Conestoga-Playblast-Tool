@@ -2003,9 +2003,12 @@ class PBCVisibilityDialog(QtWidgets.QDialog):
 class PBCShotMask(object):
     """Helper around the PlayblastCreatorShotMask locator.
 
-    Mirrors the ZurbriggShotMask pattern from v1.4.2: the plugin is
-    loaded on demand, and the mask is created as a transform + locator
-    shape pair so there is exactly one persistent mask in the scene.
+    Mirrors the reference v1.4.2 shot-mask pattern: the plug-in is
+    loaded on demand, the mask is created as a transform + locator
+    shape pair, and all attribute writes are driven through a fresh
+    `get_mask()` lookup - never through the name returned by
+    `createNode`, which can be a partial path that becomes ambiguous
+    when duplicate mask transforms accumulate.
     """
 
     NODE_NAME = "PlayblastCreatorShotMask"
@@ -2017,36 +2020,59 @@ class PBCShotMask(object):
         return PBCPlayblastUtils.load_plugin()
 
     @classmethod
-    def get_mask(cls):
+    def _ls_masks(cls):
+        """Return every shot-mask locator in the scene as full DAG
+        paths. Full paths keep setAttr / delete unambiguous even after
+        prior sessions have left stale mask transforms behind.
+        """
         if not PBCPlayblastUtils.is_plugin_loaded():
-            return None
+            return []
         try:
-            nodes = cmds.ls(type=cls.NODE_NAME) or []
+            return cmds.ls(type=cls.NODE_NAME, long=True) or []
         except Exception:
-            return None
+            return []
+
+    @classmethod
+    def get_mask(cls):
+        """Return the first shot-mask locator in the scene (full DAG
+        path) or None. Matches v1.4.2's convention of a single mask
+        per scene - if duplicates exist, delete_all_masks should be
+        called to clean up.
+        """
+        nodes = cls._ls_masks()
         return nodes[0] if nodes else None
 
     @classmethod
     def create_mask(cls):
-        """Make sure a shot-mask node exists in the scene and return it.
+        """Ensure exactly one shot-mask node exists and return its full
+        DAG path. Any stale duplicates are removed first so the
+        returned name is guaranteed to resolve unambiguously.
 
-        The plug-in must be loaded first; otherwise createNode fails with
-        "Unknown object type: PlayblastCreatorShotMask".
+        The plug-in must be loaded first; otherwise createNode fails
+        with "Unknown object type: PlayblastCreatorShotMask".
         """
         if not cls.ensure_plugin():
             return None
-        mask = cls.get_mask()
-        if mask:
-            return mask
+
+        # Remove any stale duplicates from previous sessions or errant
+        # playblasts so setAttr calls by short name remain unambiguous.
+        existing = cls._ls_masks()
+        if len(existing) > 1:
+            cls.delete_all_masks()
+            existing = []
+
+        if existing:
+            return existing[0]
+
         selection = cmds.ls(sl=True) or []
         try:
-            transform = cmds.createNode(
+            cmds.createNode(
                 "transform", name=cls.TRANSFORM_NODE_NAME, skipSelect=True
             )
-            mask = cmds.createNode(
+            cmds.createNode(
                 cls.NODE_NAME,
                 name=cls.SHAPE_NODE_NAME,
-                parent=transform,
+                parent=cls.TRANSFORM_NODE_NAME,
                 skipSelect=True,
             )
         finally:
@@ -2055,28 +2081,40 @@ class PBCShotMask(object):
                     cmds.select(selection, r=True)
                 except Exception:
                     pass
-        return mask
+
+        # Resolve the freshly created node by full DAG path so the
+        # caller never sees an ambiguous short name.
+        return cls.get_mask()
 
     @classmethod
     def delete_mask(cls):
-        mask = cls.get_mask()
-        if not mask:
-            return
-        transform = cmds.listRelatives(mask, fullPath=True, parent=True) or []
-        try:
-            if transform:
-                cmds.delete(transform[0])
-            else:
-                cmds.delete(mask)
-        except Exception:
-            pass
+        """Delete every PlayblastCreatorShotMask locator (and its
+        parent transform) in the scene. Called `delete_mask` - rather
+        than delete_all - for symmetry with the reference
+        implementation, but it always removes every mask so duplicate
+        transforms never accumulate.
+        """
+        cls.delete_all_masks()
+
+    @classmethod
+    def delete_all_masks(cls):
+        for mask in cls._ls_masks():
+            transform = cmds.listRelatives(mask, fullPath=True, parent=True) or []
+            try:
+                if transform:
+                    cmds.delete(transform[0])
+                else:
+                    cmds.delete(mask)
+            except Exception:
+                pass
 
     @classmethod
     def set_camera(cls, camera_name):
-        """Bind an existing mask to a camera.
+        """Bind the mask to a camera.
 
-        An empty string means the mask draws on all cameras (matches the
-        v1.4.2 behaviour when no specific camera is chosen).
+        An empty string means the mask draws on every camera - use
+        this during playblast so the overlay appears regardless of
+        which camera Maya's offscreen render pass picks.
         """
         mask = cls.get_mask()
         if not mask:
@@ -2091,6 +2129,18 @@ class PBCShotMask(object):
             )
         except RuntimeError:
             pass
+
+    @classmethod
+    def get_camera(cls):
+        mask = cls.get_mask()
+        if not mask:
+            return ""
+        if not cmds.attributeQuery("camera", node=mask, exists=True):
+            return ""
+        try:
+            return cmds.getAttr("{0}.camera".format(mask)) or ""
+        except Exception:
+            return ""
 
     @classmethod
     def set_visible(cls, visible):
@@ -3105,10 +3155,20 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         except Exception:
             traceback.print_exc()
 
-    def _push_shot_mask_attrs(self, mask):
+    def _push_shot_mask_attrs(self, mask=None):
         """Write the shot mask tab's current label / border / counter
-        settings onto the supplied mask node.
+        settings onto the mask node. If no mask name is supplied (or
+        the one supplied is stale), the mask is resolved fresh via
+        PBCShotMask.get_mask() so setAttr always targets the currently
+        addressable full DAG path.
         """
+        # Always resolve by full DAG path at write time; the value
+        # returned by createNode can be a partial path that turns
+        # ambiguous if duplicate mask transforms exist in the scene.
+        mask = PBCShotMask.get_mask()
+        if not mask:
+            return
+
         attrs = [
             ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
             ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
@@ -3118,11 +3178,20 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             ("bottomRightText", self.sm_bottom_right_le.text() if self.sm_bottom_right_cb.isChecked() else ""),
         ]
         for attr, value in attrs:
-            cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+            try:
+                cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+            except RuntimeError:
+                pass
 
-        cmds.setAttr("{0}.topBorder".format(mask), self.sm_top_border_cb.isChecked())
-        cmds.setAttr("{0}.bottomBorder".format(mask), self.sm_bottom_border_cb.isChecked())
-        cmds.setAttr("{0}.counterPadding".format(mask), self.sm_counter_padding_sb.value())
+        for attr, value in (
+            ("topBorder", self.sm_top_border_cb.isChecked()),
+            ("bottomBorder", self.sm_bottom_border_cb.isChecked()),
+            ("counterPadding", self.sm_counter_padding_sb.value()),
+        ):
+            try:
+                cmds.setAttr("{0}.{1}".format(mask, attr), value)
+            except RuntimeError:
+                pass
 
     def apply_shot_mask_tab_settings(self):
         try:
@@ -3133,6 +3202,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 )
                 return
 
+            # Collapse any stale duplicates to a single fresh mask so
+            # subsequent setAttr calls by short name stay unambiguous.
+            PBCShotMask.delete_all_masks()
             mask = PBCShotMask.create_mask()
             if not mask:
                 self.on_log_output(
@@ -3140,7 +3212,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 )
                 return
 
-            self._push_shot_mask_attrs(mask)
+            self._push_shot_mask_attrs()
 
             self.shot_mask_cb.setChecked(self.sm_enable_mask_cb.isChecked())
 
@@ -3174,19 +3246,20 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
     def _prepare_shot_mask_for_playblast(self):
         """Delete-and-recreate the shot mask before a playblast so the
-        node always carries the latest tab settings, then unbind the
-        camera so the mask renders on whichever camera Maya's playblast
-        actually uses (matches the v1.4.2 pattern).
+        node always carries the latest tab settings, then bind the
+        camera attribute to the user's selected playblast camera so
+        the overlay appears on that view (matches the reference
+        implementation's pre_playblast behaviour).
 
-        Returns the mask node name, or "" if the user has the shot mask
-        disabled or the plug-in could not be loaded.
+        Returns the mask node's full DAG path, or "" if the user has
+        the shot mask disabled or the plug-in could not be loaded.
         """
         if not self.shot_mask_cb.isChecked():
             # User opted out for this playblast - make sure no stale
             # mask draws over the output.
             try:
                 if PBCPlayblastUtils.is_plugin_loaded():
-                    PBCShotMask.delete_mask()
+                    PBCShotMask.delete_all_masks()
             except Exception:
                 pass
             return ""
@@ -3198,9 +3271,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             )
             return ""
 
-        # Always start from a clean node so changes made on the Shot
-        # Mask tab between playblasts are guaranteed to take effect.
-        PBCShotMask.delete_mask()
+        # Always start from a clean scene so any prior mask transforms
+        # (including stale duplicates from earlier sessions that would
+        # otherwise make the shape name ambiguous and break setAttr)
+        # are gone before we build the fresh node.
+        PBCShotMask.delete_all_masks()
         mask = PBCShotMask.create_mask()
         if not mask:
             self.on_log_output(
@@ -3208,11 +3283,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             )
             return ""
 
-        self._push_shot_mask_attrs(mask)
-        # Empty camera == "draw on every camera". This is what makes the
-        # overlay reliably appear in the playblast regardless of which
-        # camera Maya picks for the offscreen render pass.
-        PBCShotMask.set_camera("")
+        self._push_shot_mask_attrs()
+
+        # Bind the mask to the camera the playblast is about to use so
+        # the overlay shows up on exactly that camera's offscreen pass.
+        # Falls back to "" (draws on every camera) if the UI hasn't
+        # resolved a camera yet - that's the v1.4.2 safety net.
+        camera_name = self._resolve_playblast_camera() or ""
+        PBCShotMask.set_camera(camera_name)
         PBCShotMask.set_visible(True)
         return mask
 
