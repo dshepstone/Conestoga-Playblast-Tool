@@ -3187,6 +3187,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         """Build the final playblast and save it to the output folder
         chosen on the Output tab.
         """
+        # Open the Output Log so the user actually sees any errors /
+        # status messages we emit during the blast.
+        if hasattr(self, "log_group"):
+            try:
+                self.log_group.set_expanded(True)
+            except Exception:
+                pass
+
         try:
             output_dir = self.output_dir_path_le.text().strip()
             if not output_dir:
@@ -3210,10 +3218,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             filename = self.output_filename_le.text().strip()
             if not filename:
                 filename = self.filenamePreviewLabel.text().strip()
-                # The preview label includes the container extension
-                # (".mov"/".mp4"); strip it - PBCPlayblast.execute adds
-                # the correct one itself.
-                filename = os.path.splitext(filename)[0]
+            # PBCPlayblast.execute appends the container extension
+            # itself, so strip any extension the user (or the Name
+            # Generator) baked into the field - otherwise the saved
+            # file ends up as "name.mov.mov".
+            filename = os.path.splitext(filename)[0]
             if not filename:
                 self.on_log_output(
                     "[Error] Filename is empty. Fill in the Name "
@@ -3230,6 +3239,34 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             container = self.encoding_container_cmb.currentText()
             codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
+
+            # Pre-flight: if the chosen container needs ffmpeg but
+            # ffmpeg is not configured, tell the user directly and
+            # offer to fall back to a PNG image sequence instead of
+            # silently failing inside PBCPlayblast.execute().
+            if self._playblast.requires_ffmpeg():
+                ffmpeg_path = PBCPlayblastUtils.get_ffmpeg_path()
+                if not self._playblast.validate_ffmpeg(ffmpeg_path):
+                    choice = QtWidgets.QMessageBox.warning(
+                        self,
+                        "ffmpeg not configured",
+                        "This playblast is set to '{0}', which needs ffmpeg "
+                        "to encode.\n\nffmpeg is not configured on the "
+                        "Settings tab.\n\nFall back to a PNG image "
+                        "sequence for this playblast?".format(container),
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                        QtWidgets.QMessageBox.Yes,
+                    )
+                    if choice != QtWidgets.QMessageBox.Yes:
+                        self.on_log_output(
+                            "[Info] Playblast cancelled. Set an ffmpeg path "
+                            "on the Settings tab, or switch the Encoding "
+                            "tab's Container to 'Image'."
+                        )
+                        return
+                    # Temporarily swap to an image sequence so the
+                    # blast still produces usable output.
+                    self._playblast.set_encoding("Image", "png")
 
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_visibility_preset()
@@ -3255,6 +3292,13 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         settings will look like. The output goes to the temp folder
         so the Output tab's destination is not touched.
         """
+        # Open the Output Log so preview status / errors are visible.
+        if hasattr(self, "log_group"):
+            try:
+                self.log_group.set_expanded(True)
+            except Exception:
+                pass
+
         try:
             preview_dir = PBCPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
             try:
@@ -4295,8 +4339,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
     # ------- Footer: log + action bar ---------------------------------
     def _build_footer(self):
         # Log area wrapped in a collapsible group
-        log_group = PBCCollapsibleGrpWidget("Output Log")
-        log_group.set_expanded(False)
+        self.log_group = PBCCollapsibleGrpWidget("Output Log")
+        self.log_group.set_expanded(False)
 
         log_controls = QtWidgets.QHBoxLayout()
         log_controls.setContentsMargins(0, 0, 0, 0)
@@ -4307,8 +4351,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.output_edit.setMinimumHeight(80)
         self.output_edit.setMaximumHeight(160)
 
-        log_group.add_widget(self.output_edit)
-        log_group.add_layout(log_controls)
+        self.log_group.add_widget(self.output_edit)
+        self.log_group.add_layout(log_controls)
 
         # Action bar
         action_row = QtWidgets.QHBoxLayout()
@@ -4325,7 +4369,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         footer_layout = QtWidgets.QVBoxLayout(footer_frame)
         footer_layout.setContentsMargins(8, 6, 8, 8)
         footer_layout.setSpacing(4)
-        footer_layout.addWidget(log_group)
+        footer_layout.addWidget(self.log_group)
         footer_layout.addLayout(action_row)
 
         return footer_frame
