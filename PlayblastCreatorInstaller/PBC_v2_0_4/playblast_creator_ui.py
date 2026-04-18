@@ -1150,6 +1150,12 @@ class PBCPlayblast(QtCore.QObject):
         self._container_format = container_format
         self._encoder = encoder
 
+    def get_container_format(self):
+        return self._container_format
+
+    def get_encoder(self):
+        return self._encoder
+
     def set_h264_settings(self, quality, preset):
         if not quality in PBCPlayblast.H264_QUALITIES.keys():
             self.log_error("Invalid h264 quality: {0}. Expected one of {1}".format(quality, PBCPlayblast.H264_QUALITIES.keys()))
@@ -2207,6 +2213,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         "Image",
     ]
 
+    WORKSPACE_CONTROL_NAME = "PBCWorkspaceControl"
+
     collapsed_state_changed = QtCore.Signal()
 
 
@@ -2293,13 +2301,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.output_dir_path_le = PBCLineEdit(PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_PATH)
         self.output_dir_path_le.setPlaceholderText("{project}/movies")
 
-        self.output_dir_path_select_btn = QtWidgets.QPushButton("...")
-        self.output_dir_path_select_btn.setFixedSize(icon_button_width, icon_button_height)
-        self.output_dir_path_select_btn.setToolTip("Select Output Directory")
-
-        self.output_dir_path_show_folder_btn = QtWidgets.QPushButton(QtGui.QIcon(":fileOpen.png"), "")
-        self.output_dir_path_show_folder_btn.setFixedSize(icon_button_width, icon_button_height)
-        self.output_dir_path_show_folder_btn.setToolTip("Show in Folder")
+        # Single browse button: the folder icon opens a file dialog so
+        # the user can pick the output directory. The previous "..."
+        # button has been removed at the user's request.
+        self.output_dir_path_browse_btn = QtWidgets.QPushButton(QtGui.QIcon(":fileOpen.png"), "")
+        self.output_dir_path_browse_btn.setFixedSize(icon_button_width, icon_button_height)
+        self.output_dir_path_browse_btn.setToolTip("Browse for Output Folder")
 
         self.output_filename_le = PBCLineEdit(PBCLineEdit.TYPE_PLAYBLAST_OUTPUT_FILENAME)
         self.output_filename_le.setPlaceholderText("{scene}_{timestamp}")
@@ -2352,12 +2359,51 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.scale_percent_sb.setSuffix(" %")
         self.scale_percent_sb.setMinimumWidth(spin_box_min_width)
 
-        # Image quality slider + mirrored spinbox (Maya's "Quality")
+        # Image quality slider + mirrored spinbox (Maya's "Quality").
+        # The default Qt slider is almost invisible against the dark
+        # panel, so we draw an explicit groove, filled sub-page, and a
+        # clearly-rounded handle.
         self.image_quality_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.image_quality_slider.setRange(0, 100)
         self.image_quality_slider.setValue(100)
         self.image_quality_slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
         self.image_quality_slider.setTickInterval(25)
+        self.image_quality_slider.setMinimumHeight(int(24 * scale_value))
+        self.image_quality_slider.setStyleSheet("""
+            QSlider {
+                min-height: 24px;
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: #1E1E1E;
+                border: 1px solid #555555;
+                border-radius: 3px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #4B94CF;
+                border: 1px solid #3A7CB3;
+                border-radius: 3px;
+            }
+            QSlider::add-page:horizontal {
+                background: #2B2B2B;
+                border: 1px solid #3A3A3A;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #E6E6E6;
+                border: 1px solid #4B94CF;
+                width: 14px;
+                margin: -6px 0;
+                border-radius: 7px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #FFFFFF;
+                border: 1px solid #6FB3E8;
+            }
+            QSlider::tick-mark:horizontal {
+                background: #777777;
+            }
+        """)
 
         self.image_quality_sb = QtWidgets.QSpinBox()
         self.image_quality_sb.setRange(0, 100)
@@ -2844,6 +2890,87 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
     def on_log_output(self, message):
         self.output_edit.appendPlainText(message)
 
+    # ------------------------------------------------------------------
+    # Auto-adjust window height per active tab
+    # ------------------------------------------------------------------
+    def showEvent(self, event):
+        super(PBCPlayblastWidget, self).showEvent(event)
+        # Defer the first resize until the widget has actually laid out,
+        # otherwise sizeHint() returns a stale value.
+        QtCore.QTimer.singleShot(0, self._adjust_height_to_current_tab)
+
+    def _adjust_height_to_current_tab(self, *_):
+        """Resize the host window so it hugs the height of the active tab.
+
+        Works whether the widget is embedded in a Maya workspaceControl
+        (docked or floating) or in a plain top-level window.
+        """
+        if not hasattr(self, "tabs") or self.tabs is None:
+            return
+
+        current = self.tabs.currentWidget()
+        if current is None:
+            return
+
+        # Chrome around the tab pane = title label + footer + margins +
+        # the tab bar itself. Use sizeHint() of our own frame minus the
+        # tab content to get a real measurement that adapts to DPI.
+        tab_content_h = current.sizeHint().height()
+        tab_bar_h = self.tabs.tabBar().sizeHint().height()
+        layout_margins = self.layout().contentsMargins() if self.layout() else None
+        top_bottom = 0
+        if layout_margins is not None:
+            top_bottom = layout_margins.top() + layout_margins.bottom()
+
+        title_h = 0
+        footer_h = 0
+        main_layout = self.layout()
+        if main_layout is not None:
+            for i in range(main_layout.count()):
+                item = main_layout.itemAt(i)
+                w = item.widget() if item is not None else None
+                if w is None or w is self.tabs:
+                    continue
+                title_h_or_footer = w.sizeHint().height()
+                # Crude classification: first widget is title, any widget
+                # laid out below the tabs is footer.
+                if i == 0:
+                    title_h += title_h_or_footer
+                else:
+                    footer_h += title_h_or_footer
+
+        spacing = main_layout.spacing() if main_layout is not None else 0
+        # Pane border padding
+        pane_padding = 24
+        total_h = (
+            title_h
+            + tab_bar_h
+            + tab_content_h
+            + footer_h
+            + top_bottom
+            + spacing * 3
+            + pane_padding
+        )
+
+        # Honour DPI scale
+        total_h = int(total_h)
+
+        # Prefer the workspaceControl resize API when it exists, so docked
+        # and floating workspace controls both respond. Fall back to the
+        # top-level window for plain-widget usage.
+        try:
+            if cmds.workspaceControl(self.WORKSPACE_CONTROL_NAME, q=True, exists=True):
+                cmds.workspaceControl(
+                    self.WORKSPACE_CONTROL_NAME, e=True, resizeHeight=total_h
+                )
+                return
+        except Exception:
+            pass
+
+        window = self.window()
+        if window is not None and window is not self:
+            window.resize(window.width(), total_h)
+
     def default_temp_output_dir(self):
         root = cmds.workspace(q=True, rootDirectory=True)
         if not root:
@@ -2989,15 +3116,42 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self._playblast.set_visibility(visibility_data)
 
     def on_execute(self):
+        """Build the final playblast and save it to the output folder
+        chosen on the Output tab.
+        """
         try:
             output_dir = self.output_dir_path_le.text().strip()
             if not output_dir:
-                output_dir = cmds.workspace(q=True, rootDirectory=True)
-            os.makedirs(output_dir, exist_ok=True)
+                output_dir = cmds.workspace(q=True, rootDirectory=True) or ""
+                if output_dir:
+                    output_dir = os.path.normpath(os.path.join(output_dir, "movies"))
+            if not output_dir:
+                self.on_log_output(
+                    "[Error] Output folder is empty. Pick a folder on "
+                    "the Output tab before creating a playblast."
+                )
+                return
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+            except OSError as exc:
+                self.on_log_output(
+                    "[Error] Could not create output folder '{0}': {1}".format(output_dir, exc)
+                )
+                return
 
             filename = self.output_filename_le.text().strip()
             if not filename:
                 filename = self.filenamePreviewLabel.text().strip()
+                # The preview label includes the container extension
+                # (".mov"/".mp4"); strip it - PBCPlayblast.execute adds
+                # the correct one itself.
+                filename = os.path.splitext(filename)[0]
+            if not filename:
+                self.on_log_output(
+                    "[Error] Filename is empty. Fill in the Name "
+                    "Generator or the Output tab's Filename field."
+                )
+                return
 
             width, height = self._selected_resolution()
             self._playblast.set_resolution((width, height))
@@ -3012,55 +3166,47 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_quick_viewport_toggles()
 
-            # Delete-then-recreate the shot mask so the playblast always
-            # uses the freshest tab settings. Restore the prior camera
-            # binding after the blast so the user's manual binding (if
-            # any) survives.
-            prior_camera = ""
-            try:
-                if PBCPlayblastUtils.is_plugin_loaded():
-                    prior_mask = PBCShotMask.get_mask()
-                    if prior_mask and cmds.attributeQuery("camera", node=prior_mask, exists=True):
-                        prior_camera = cmds.getAttr("{0}.camera".format(prior_mask)) or ""
-            except Exception:
-                prior_camera = ""
-
-            self._prepare_shot_mask_for_playblast()
-
-            try:
-                self._playblast.execute(
-                    output_dir=output_dir,
-                    filename=filename,
-                    padding=self.frame_padding_sb.value(),
-                    overscan=self.overscan_cb.isChecked(),
-                    show_ornaments=self.ornaments_cb.isChecked(),
-                    show_in_viewer=self.viewer_cb.isChecked(),
-                    offscreen=self.offscreen_cb.isChecked(),
-                    overwrite=self.force_overwrite_cb.isChecked(),
-                    camera_override=self._active_camera_override(),
-                    enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
-                    include_sound=self.sound_enable_cb.isChecked(),
-                    scale_percent=self.scale_percent_sb.value(),
-                    image_quality_override=self.image_quality_sb.value(),
-                )
-            finally:
-                if prior_camera and PBCShotMask.get_mask():
-                    PBCShotMask.set_camera(prior_camera)
+            self._run_playblast(
+                output_dir=output_dir,
+                filename=filename,
+                show_in_viewer=self.viewer_cb.isChecked(),
+                overwrite=self.force_overwrite_cb.isChecked(),
+                single_frame=False,
+            )
+            self.on_log_output(
+                "Playblast saved to: {0}".format(os.path.join(output_dir, filename))
+            )
         except Exception:
             traceback.print_exc()
             self.on_log_output("[Error] Playblast failed. See Script Editor for details.")
 
     def on_preview(self):
+        """Render a single-frame preview (current time) that shows
+        exactly what the final playblast's shot mask and rendering
+        settings will look like. The output goes to the temp folder
+        so the Output tab's destination is not touched.
+        """
         try:
             preview_dir = PBCPlayblastUtils.get_temp_output_dir_path() or self.default_temp_output_dir()
-            os.makedirs(preview_dir, exist_ok=True)
+            try:
+                os.makedirs(preview_dir, exist_ok=True)
+            except OSError as exc:
+                self.on_log_output(
+                    "[Error] Could not create preview folder '{0}': {1}".format(preview_dir, exc)
+                )
+                return
 
-            preview_name = "preview_{0}".format(int(time.time()))
+            preview_name = "playblast_preview_{0}".format(int(time.time()))
             width, height = self._selected_resolution()
             self._playblast.set_resolution((width, height))
 
-            start_frame, end_frame = self._selected_frame_range()
-            self._playblast.set_frame_range((start_frame, end_frame))
+            # Single-frame preview uses the current time for both
+            # ends so Maya renders exactly one still.
+            try:
+                current_time = int(cmds.currentTime(q=True))
+            except Exception:
+                current_time = 0
+            self._playblast.set_frame_range((current_time, current_time))
 
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_quick_viewport_toggles()
@@ -3068,43 +3214,75 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
 
-            # See on_execute for the rationale: delete-and-recreate the
-            # shot mask, run the playblast unbound from any specific
-            # camera, then restore the prior binding.
-            prior_camera = ""
-            try:
-                if PBCPlayblastUtils.is_plugin_loaded():
-                    prior_mask = PBCShotMask.get_mask()
-                    if prior_mask and cmds.attributeQuery("camera", node=prior_mask, exists=True):
-                        prior_camera = cmds.getAttr("{0}.camera".format(prior_mask)) or ""
-            except Exception:
-                prior_camera = ""
-
-            self._prepare_shot_mask_for_playblast()
-
-            try:
-                self._playblast.execute(
-                    output_dir=preview_dir,
-                    filename=preview_name,
-                    padding=self.frame_padding_sb.value(),
-                    overscan=self.overscan_cb.isChecked(),
-                    show_ornaments=self.ornaments_cb.isChecked(),
-                    show_in_viewer=True,
-                    offscreen=self.offscreen_cb.isChecked(),
-                    overwrite=True,
-                    camera_override=self._active_camera_override(),
-                    enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
-                    include_sound=self.sound_enable_cb.isChecked(),
-                    scale_percent=self.scale_percent_sb.value(),
-                    image_quality_override=self.image_quality_sb.value(),
-                )
-            finally:
-                if prior_camera and PBCShotMask.get_mask():
-                    PBCShotMask.set_camera(prior_camera)
-            self.on_log_output("Preview playblast created in temp folder: {0}".format(preview_dir))
+            self._run_playblast(
+                output_dir=preview_dir,
+                filename=preview_name,
+                show_in_viewer=True,
+                overwrite=True,
+                single_frame=True,
+            )
+            self.on_log_output(
+                "Preview frame created in temp folder: {0}".format(preview_dir)
+            )
         except Exception:
             traceback.print_exc()
-            self.on_log_output("[Error] Preview playblast failed. See Script Editor for details.")
+            self.on_log_output("[Error] Preview frame failed. See Script Editor for details.")
+
+    def _run_playblast(self, output_dir, filename, show_in_viewer, overwrite, single_frame):
+        """Shared runner for Preview and Create Playblast.
+
+        Handles the delete/recreate shot-mask dance and restores the
+        user's prior camera binding when the blast is done. When
+        single_frame is True, the playblast is emitted as a single
+        still image (no container transcode) so the Preview button
+        never produces a movie.
+        """
+        prior_camera = ""
+        try:
+            if PBCPlayblastUtils.is_plugin_loaded():
+                prior_mask = PBCShotMask.get_mask()
+                if prior_mask and cmds.attributeQuery("camera", node=prior_mask, exists=True):
+                    prior_camera = cmds.getAttr("{0}.camera".format(prior_mask)) or ""
+        except Exception:
+            prior_camera = ""
+
+        self._prepare_shot_mask_for_playblast()
+
+        original_container = self._playblast.get_container_format()
+        original_encoder = self._playblast.get_encoder()
+
+        try:
+            if single_frame:
+                # Route the output through a single-image still so
+                # the Preview frame renders instantly and never
+                # transcodes through ffmpeg.
+                self._playblast.set_encoding("Image", "png")
+
+            self._playblast.execute(
+                output_dir=output_dir,
+                filename=filename,
+                padding=self.frame_padding_sb.value(),
+                overscan=self.overscan_cb.isChecked(),
+                show_ornaments=self.ornaments_cb.isChecked(),
+                show_in_viewer=show_in_viewer,
+                offscreen=self.offscreen_cb.isChecked(),
+                overwrite=overwrite,
+                camera_override=self._active_camera_override(),
+                enable_camera_frame_range=(not single_frame) and (self.frame_range_cmb.currentText() == "Camera"),
+                include_sound=(not single_frame) and self.sound_enable_cb.isChecked(),
+                scale_percent=self.scale_percent_sb.value(),
+                image_quality_override=self.image_quality_sb.value(),
+            )
+        finally:
+            if single_frame:
+                # Restore the user's chosen encoding so the next
+                # Create Playblast is not affected by the preview.
+                try:
+                    self._playblast.set_encoding(original_container, original_encoder)
+                except Exception:
+                    pass
+            if prior_camera and PBCShotMask.get_mask():
+                PBCShotMask.set_camera(prior_camera)
 
     def _resolve_playblast_camera(self):
         """Return the camera transform name the playblast will use.
@@ -3155,6 +3333,82 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         except Exception:
             traceback.print_exc()
 
+    def _current_scene_fps(self):
+        """Return the scene's frame rate as an integer string (e.g.
+        '24', '30'). Maya stores time units as named presets ('film',
+        'ntsc', 'pal', ...); we translate those to the numeric rate so
+        the shot mask displays a proper FPS number.
+        """
+        unit_to_fps = {
+            "game": 15,
+            "film": 24,
+            "pal": 25,
+            "ntsc": 30,
+            "show": 48,
+            "palf": 50,
+            "ntscf": 60,
+            "23.976fps": 23.976,
+            "24fps": 24,
+            "25fps": 25,
+            "29.97fps": 29.97,
+            "30fps": 30,
+            "48fps": 48,
+            "50fps": 50,
+            "60fps": 60,
+        }
+        try:
+            unit = cmds.currentUnit(q=True, time=True)
+        except Exception:
+            return ""
+        if unit in unit_to_fps:
+            value = unit_to_fps[unit]
+        else:
+            # "<number>fps" fallback.
+            try:
+                value = float(unit.replace("fps", ""))
+            except (ValueError, AttributeError):
+                return unit or ""
+        if float(value).is_integer():
+            return str(int(value))
+        return "{0:g}".format(value)
+
+    def _resolve_ui_tokens(self, text):
+        """Preprocess UI-level tokens before the text is written onto
+        the shot-mask locator.
+
+        - {username} becomes the current Name Generator preview so the
+          mask carries the full generated submission name instead of
+          the OS account name.
+        - {fps} becomes the scene's numeric frame rate (e.g. '24')
+          instead of Maya's internal unit token ('film', 'ntsc').
+
+        Any other tokens ({scene}, {camera}, {counter}, {date}, ...)
+        pass straight through to the plug-in for draw-time resolution.
+        """
+        if not text:
+            return text
+        if "{username}" in text:
+            generated = ""
+            try:
+                generated = self.filenamePreviewLabel.text().strip()
+                # Strip container extension so the mask label reads as
+                # a name, not a filename.
+                generated = os.path.splitext(generated)[0]
+            except Exception:
+                generated = ""
+            if not generated:
+                # Fall back to the login name only when the Name
+                # Generator preview is empty.
+                try:
+                    import getpass
+                    generated = getpass.getuser()
+                except Exception:
+                    generated = ""
+            text = text.replace("{username}", generated)
+        if "{fps}" in text:
+            text = text.replace("{fps}", self._current_scene_fps())
+        return text
+
     def _push_shot_mask_attrs(self, mask=None):
         """Write the shot mask tab's current label / border / counter
         settings onto the mask node. If no mask name is supplied (or
@@ -3178,8 +3432,9 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             ("bottomRightText", self.sm_bottom_right_le.text() if self.sm_bottom_right_cb.isChecked() else ""),
         ]
         for attr, value in attrs:
+            resolved = self._resolve_ui_tokens(value)
             try:
-                cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+                cmds.setAttr("{0}.{1}".format(mask, attr), resolved, type="string")
             except RuntimeError:
                 pass
 
@@ -3311,8 +3566,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self.on_log_output("[Error] Failed to apply tool settings.")
 
     def create_connections(self):
-        self.output_dir_path_select_btn.clicked.connect(self.select_output_dir)
-        self.output_dir_path_show_folder_btn.clicked.connect(self.open_output_dir)
+        self.output_dir_path_browse_btn.clicked.connect(self.select_output_dir)
         self.clear_btn.clicked.connect(self.clear_output_log)
 
         self.camera_select_hide_defaults_cb.toggled.connect(self.refresh_cameras)
@@ -3376,6 +3630,10 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.tool_temp_dir_browse_btn.clicked.connect(self.browse_temp_output_dir)
         self.tool_apply_btn.clicked.connect(self.apply_tool_tab_settings)
         self._playblast.output_logged.connect(self.on_log_output)
+
+        # Auto-adjust the window height whenever the user switches tabs so
+        # the frame hugs the content of the active tab.
+        self.tabs.currentChanged.connect(self._adjust_height_to_current_tab)
 
     def load_settings(self):
         self.refresh_cameras()
@@ -3542,8 +3800,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         output_path_row = QtWidgets.QHBoxLayout()
         output_path_row.setSpacing(2)
         output_path_row.addWidget(self.output_dir_path_le)
-        output_path_row.addWidget(self.output_dir_path_select_btn)
-        output_path_row.addWidget(self.output_dir_path_show_folder_btn)
+        output_path_row.addWidget(self.output_dir_path_browse_btn)
 
         # Filename row
         output_file_row = QtWidgets.QHBoxLayout()
@@ -3651,9 +3908,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         quality_form.addLayoutRow(1, "Scale:", scale_row)
 
         image_quality_row = QtWidgets.QHBoxLayout()
-        image_quality_row.setSpacing(6)
+        image_quality_row.setSpacing(10)
+        # The slider gets the full row so it is clearly visible and
+        # easy to drag; the mirrored spinbox sits to its right.
         image_quality_row.addWidget(self.image_quality_slider, 1)
-        image_quality_row.addWidget(self.image_quality_sb)
+        self.image_quality_sb.setFixedWidth(int(60 * PBCPlayblastUtils.dpi_real_scale_value()))
+        image_quality_row.addWidget(self.image_quality_sb, 0)
         quality_form.addLayoutRow(2, "Quality:", image_quality_row)
 
         padding_row = QtWidgets.QHBoxLayout()
@@ -3675,10 +3935,21 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         frame_range_row.addStretch()
         frame_range_body.addLayout(frame_range_row)
 
-        # Visibility card
+        # Visibility card - chooses which Maya scene element types are
+        # drawn into the playblast. Users were unsure what it did, so
+        # add an explanatory help caption alongside the controls.
         visibility_card, visibility_body = self._card("Visibility")
+        visibility_body.addWidget(self._help_caption(
+            "Controls which object types Maya draws into the playblast. "
+            "\"Viewport\" mirrors exactly what is visible in the active "
+            "viewport right now. The other presets force a specific "
+            "set of object types on regardless of the viewport "
+            "(Geometry Only, Dynamics, etc.). Click Customize... to "
+            "hand-pick every object type individually - those custom "
+            "choices are saved as \"Custom\"."
+        ))
         visibility_row = QtWidgets.QHBoxLayout()
-        visibility_row.setSpacing(4)
+        visibility_row.setSpacing(6)
         visibility_row.addWidget(self.visibility_cmb)
         visibility_row.addWidget(self.visibility_customize_btn)
         visibility_row.addStretch()
@@ -3994,10 +4265,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             "Supports tokens: {project}, {scene}, {timestamp}.\n"
             "Example: {project}/movies"
         )
-        self.output_dir_path_select_btn.setToolTip("Browse for an output folder.")
-        self.output_dir_path_show_folder_btn.setToolTip(
-            "Open the current output folder in your file browser."
-        )
+        self.output_dir_path_browse_btn.setToolTip("Browse for an output folder.")
         self.output_filename_le.setToolTip(
             "Output filename without extension.\n"
             "Supports tokens: {scene}, {timestamp}, {camera}.\n"
@@ -4270,7 +4538,7 @@ def show_ui():
     if not PBCPlayblastUtils.load_plugin():
         return None
 
-    workspace_name = "PBCWorkspaceControl"
+    workspace_name = PBCPlayblastWidget.WORKSPACE_CONTROL_NAME
 
     # If Maya already has a workspaceControl by this name (from a prior
     # session, a saved layout, or a stale shelf click), bring it forward
