@@ -75,22 +75,41 @@ class PBCPlayblastUtils(object):
         return False
 
     @classmethod
+    def _set_plugin_autoload(cls):
+        """Mark the plugin for auto-load so scenes that reference the
+        PlayblastCreatorShotMask node type open cleanly next session.
+
+        Without this, Maya reports 'Unrecognized node type
+        PlayblastCreatorShotMask; preserving node information during this
+        session' whenever a saved scene is reopened before the UI is
+        launched.
+        """
+        try:
+            cmds.pluginInfo(cls.PLUG_IN_NAME, edit=True, autoload=True)
+        except Exception:
+            pass
+
+    @classmethod
     def load_plugin(cls):
         if cls.is_plugin_loaded():
+            cls._set_plugin_autoload()
             return True
 
+        # Try the short name first (relies on MAYA_PLUG_IN_PATH), then
+        # fall back to any absolute paths we know about.
         load_targets = [cls.PLUG_IN_NAME]
         load_targets.extend(cls._plugin_search_paths())
 
         for target in load_targets:
             try:
                 cmds.loadPlugin(target)
+                cls._set_plugin_autoload()
                 return True
             except Exception:
                 continue
 
         om.MGlobal.displayError(
-            "Failed to load CP Playblast plug-in: {0}. Tried: {1}".format(
+            "Failed to load Playblast Creator plug-in: {0}. Tried: {1}".format(
                 cls.PLUG_IN_NAME, ", ".join(load_targets)
             )
         )
@@ -1932,6 +1951,113 @@ class PBCVisibilityDialog(QtWidgets.QDialog):
             self.visibility_checkboxes[i].setChecked(data[i])
 
 
+class PBCShotMask(object):
+    """Helper around the PlayblastCreatorShotMask locator.
+
+    Mirrors the ZurbriggShotMask pattern from v1.4.2: the plugin is
+    loaded on demand, and the mask is created as a transform + locator
+    shape pair so there is exactly one persistent mask in the scene.
+    """
+
+    NODE_NAME = "PlayblastCreatorShotMask"
+    TRANSFORM_NODE_NAME = "pbcShotMask"
+    SHAPE_NODE_NAME = "pbcShotMaskShape"
+
+    @classmethod
+    def ensure_plugin(cls):
+        return PBCPlayblastUtils.load_plugin()
+
+    @classmethod
+    def get_mask(cls):
+        if not PBCPlayblastUtils.is_plugin_loaded():
+            return None
+        try:
+            nodes = cmds.ls(type=cls.NODE_NAME) or []
+        except Exception:
+            return None
+        return nodes[0] if nodes else None
+
+    @classmethod
+    def create_mask(cls):
+        """Make sure a shot-mask node exists in the scene and return it.
+
+        The plug-in must be loaded first; otherwise createNode fails with
+        "Unknown object type: PlayblastCreatorShotMask".
+        """
+        if not cls.ensure_plugin():
+            return None
+        mask = cls.get_mask()
+        if mask:
+            return mask
+        selection = cmds.ls(sl=True) or []
+        try:
+            transform = cmds.createNode(
+                "transform", name=cls.TRANSFORM_NODE_NAME, skipSelect=True
+            )
+            mask = cmds.createNode(
+                cls.NODE_NAME,
+                name=cls.SHAPE_NODE_NAME,
+                parent=transform,
+                skipSelect=True,
+            )
+        finally:
+            if selection:
+                try:
+                    cmds.select(selection, r=True)
+                except Exception:
+                    pass
+        return mask
+
+    @classmethod
+    def delete_mask(cls):
+        mask = cls.get_mask()
+        if not mask:
+            return
+        transform = cmds.listRelatives(mask, fullPath=True, parent=True) or []
+        try:
+            if transform:
+                cmds.delete(transform[0])
+            else:
+                cmds.delete(mask)
+        except Exception:
+            pass
+
+    @classmethod
+    def set_camera(cls, camera_name):
+        """Bind an existing mask to a camera.
+
+        An empty string means the mask draws on all cameras (matches the
+        v1.4.2 behaviour when no specific camera is chosen).
+        """
+        mask = cls.get_mask()
+        if not mask:
+            return
+        if not cmds.attributeQuery("camera", node=mask, exists=True):
+            return
+        try:
+            cmds.setAttr(
+                "{0}.camera".format(mask),
+                camera_name or "",
+                type="string",
+            )
+        except RuntimeError:
+            pass
+
+    @classmethod
+    def set_visible(cls, visible):
+        """Toggle the mask locator's transform visibility."""
+        mask = cls.get_mask()
+        if not mask:
+            return
+        parents = cmds.listRelatives(mask, parent=True, fullPath=True) or [mask]
+        for parent in parents:
+            if cmds.attributeQuery("visibility", node=parent, exists=True):
+                try:
+                    cmds.setAttr("{0}.visibility".format(parent), bool(visible))
+                except RuntimeError:
+                    pass
+
+
 class PBCPlayblastWidget(QtWidgets.QWidget):
 
     OPT_VAR_OUTPUT_DIR = "pbcrPlayblastOutputDir"
@@ -1987,6 +2113,10 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super(PBCPlayblastWidget, self).__init__(parent)
+
+        # Load the Playblast Creator plug-in so the shot-mask node type
+        # is registered before any create_mask / ls(type=...) calls.
+        PBCPlayblastUtils.load_plugin()
 
         self._playblast = PBCPlayblast()
 
@@ -2862,41 +2992,49 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         return ""
 
     def _sync_shot_mask_to_camera(self, camera_name):
-        """Point the shot-mask node(s) at the supplied camera and toggle
-        their visibility to match the Render tab's Shot Mask checkbox.
+        """Bind the shot mask to the supplied camera and toggle its
+        visibility to match the Render tab's Shot Mask checkbox.
 
-        Without this, the mask would either always render on every camera
-        or keep the camera it was last bound to - not necessarily the one
-        the user just picked for the playblast.
+        If the mask doesn't exist yet but the user has enabled Shot Mask,
+        create it on the fly so the overlay reliably shows up in the
+        selected camera's viewport and in the playblast.
         """
         try:
-            nodes = cmds.ls(type="PlayblastCreatorShotMask") or []
-            if not nodes:
+            if not PBCPlayblastUtils.load_plugin():
+                # Plugin can't be loaded - nothing meaningful to do.
                 return
+
             enabled = self.shot_mask_cb.isChecked()
-            cam_value = camera_name or ""
-            for node in nodes:
-                if cmds.attributeQuery("camera", node=node, exists=True):
-                    try:
-                        cmds.setAttr("{0}.camera".format(node), cam_value, type="string")
-                    except RuntimeError:
-                        pass
-                # Toggle the locator transform so the draw override stops
-                # running when the user disables the mask.
-                parents = cmds.listRelatives(node, parent=True, fullPath=True) or [node]
-                for parent in parents:
-                    if cmds.attributeQuery("visibility", node=parent, exists=True):
-                        try:
-                            cmds.setAttr("{0}.visibility".format(parent), enabled)
-                        except RuntimeError:
-                            pass
+            mask = PBCShotMask.get_mask()
+            if enabled and not mask:
+                mask = PBCShotMask.create_mask()
+                if not mask:
+                    return
+
+            if not mask:
+                # Nothing to update and user has disabled the mask.
+                return
+
+            PBCShotMask.set_camera(camera_name or "")
+            PBCShotMask.set_visible(enabled)
         except Exception:
             traceback.print_exc()
 
     def apply_shot_mask_tab_settings(self):
         try:
-            nodes = cmds.ls(type="PlayblastCreatorShotMask") or []
-            mask = nodes[0] if nodes else cmds.createNode("PlayblastCreatorShotMask")
+            if not PBCPlayblastUtils.load_plugin():
+                self.on_log_output(
+                    "[Error] Shot mask plug-in could not be loaded. "
+                    "Verify playblast_creator.py is on MAYA_PLUG_IN_PATH."
+                )
+                return
+
+            mask = PBCShotMask.create_mask()
+            if not mask:
+                self.on_log_output(
+                    "[Error] Unable to create PlayblastCreatorShotMask node."
+                )
+                return
             attrs = [
                 ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
                 ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
