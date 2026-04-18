@@ -4029,18 +4029,31 @@ def show_ui():
     if not PBCPlayblastUtils.load_plugin():
         return None
 
+    workspace_name = "PBCWorkspaceControl"
+
+    # If Maya already has a workspaceControl by this name (from a prior
+    # session, a saved layout, or a stale shelf click), bring it forward
+    # instead of embedding a second widget into it.
+    if cmds.workspaceControl(workspace_name, q=True, exists=True):
+        if _pbc_playblast_workspace_control is not None and _pbc_playblast_widget is not None:
+            _pbc_playblast_workspace_control.set_visible(True)
+            return _pbc_playblast_widget
+        # Our Python globals lost track of the existing control; delete it
+        # so the fresh widget we are about to build is the only child.
+        try:
+            cmds.deleteUI(workspace_name)
+        except Exception:
+            pass
+        _pbc_playblast_workspace_control = None
+        _pbc_playblast_widget = None
+
     if _pbc_playblast_workspace_control is None:
-        _pbc_playblast_workspace_control = PBCWorkspaceControl("PBCWorkspaceControl")
+        _pbc_playblast_workspace_control = PBCWorkspaceControl(workspace_name)
 
     if _pbc_playblast_widget is None:
         _pbc_playblast_widget = PBCPlayblastWidget()
 
-    if _pbc_playblast_workspace_control.exists():
-        _pbc_playblast_workspace_control.restore(_pbc_playblast_widget)
-        _pbc_playblast_workspace_control.set_visible(True)
-    else:
-        _pbc_playblast_workspace_control.create("Playblast Creator", _pbc_playblast_widget)
-
+    _pbc_playblast_workspace_control.create("Playblast Creator", _pbc_playblast_widget)
     return _pbc_playblast_widget
 
 
