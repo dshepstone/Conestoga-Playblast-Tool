@@ -65,14 +65,38 @@ class PBCPlayblastUtils(object):
 
     @classmethod
     def is_plugin_loaded(cls):
-        loaded_plugins = cmds.pluginInfo(q=True, listPlugins=True) or []
+        # Maya's pluginInfo(loaded=True) takes either the file name or
+        # the registered plug-in name (without extension). Querying it
+        # directly is more reliable than scanning listPlugins, which
+        # returns the platform-stripped short name and never matches the
+        # ".py" suffix - that mismatch was causing repeated
+        # "Plug-in is already loaded. Skipped." warnings whenever the
+        # tool re-asked Maya to load an already-loaded plug-in.
+        try:
+            if cmds.pluginInfo(cls.PLUG_IN_NAME, q=True, loaded=True):
+                return True
+        except Exception:
+            pass
 
+        plug_in_short = os.path.splitext(cls.PLUG_IN_NAME)[0]
+        try:
+            if cmds.pluginInfo(plug_in_short, q=True, loaded=True):
+                return True
+        except Exception:
+            pass
+
+        loaded_plugins = cmds.pluginInfo(q=True, listPlugins=True) or []
         for plugin in loaded_plugins:
-            plugin_name = os.path.basename(plugin)
-            if plugin == cls.PLUG_IN_NAME or plugin_name == cls.PLUG_IN_NAME:
+            base = os.path.basename(plugin)
+            base_no_ext = os.path.splitext(base)[0]
+            if base == cls.PLUG_IN_NAME or base_no_ext == plug_in_short:
                 return True
 
         return False
+
+    # Tracks the scriptJob id that auto-loads the plug-in on scene
+    # open so we don't register it more than once per Maya session.
+    _scene_open_job_id = None
 
     @classmethod
     def _set_plugin_autoload(cls):
@@ -90,23 +114,48 @@ class PBCPlayblastUtils(object):
             pass
 
     @classmethod
+    def install_scene_open_autoload(cls):
+        """Install a SceneOpened script job that loads the plug-in if a
+        freshly opened scene needs the PlayblastCreatorShotMask node
+        type. Belt-and-braces for users who haven't yet had Maya cycle
+        through a session with autoload enabled.
+        """
+        if cls._scene_open_job_id is not None:
+            return
+        try:
+            job_id = cmds.scriptJob(
+                event=["SceneOpened", lambda: cls.load_plugin()],
+                killWithScene=False,
+            )
+            cls._scene_open_job_id = job_id
+        except Exception:
+            pass
+
+    @classmethod
     def load_plugin(cls):
         if cls.is_plugin_loaded():
             cls._set_plugin_autoload()
             return True
 
         # Try the short name first (relies on MAYA_PLUG_IN_PATH), then
-        # fall back to any absolute paths we know about.
+        # fall back to any absolute paths we know about. After every
+        # attempt re-check is_plugin_loaded so we don't ask Maya to load
+        # a plug-in that just succeeded - that produces the noisy
+        # "already loaded. Skipped." warning.
         load_targets = [cls.PLUG_IN_NAME]
         load_targets.extend(cls._plugin_search_paths())
 
         for target in load_targets:
-            try:
-                cmds.loadPlugin(target)
+            if cls.is_plugin_loaded():
                 cls._set_plugin_autoload()
                 return True
+            try:
+                cmds.loadPlugin(target, quiet=True)
             except Exception:
                 continue
+            if cls.is_plugin_loaded():
+                cls._set_plugin_autoload()
+                return True
 
         om.MGlobal.displayError(
             "Failed to load Playblast Creator plug-in: {0}. Tried: {1}".format(
@@ -2116,7 +2165,12 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
         # Load the Playblast Creator plug-in so the shot-mask node type
         # is registered before any create_mask / ls(type=...) calls.
+        # Also install a SceneOpened script job that auto-loads the
+        # plug-in for any future scene open in this Maya session - that
+        # eliminates the "Unrecognized node type" warning for scenes
+        # that contain a saved PlayblastCreatorShotMask node.
         PBCPlayblastUtils.load_plugin()
+        PBCPlayblastUtils.install_scene_open_autoload()
 
         self._playblast = PBCPlayblast()
 
@@ -2908,24 +2962,40 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_camera(self._active_camera_override() or None)
             self.apply_quick_viewport_toggles()
 
-            # Pin the shot mask to the camera we're about to blast.
-            self._sync_shot_mask_to_camera(self._resolve_playblast_camera())
+            # Delete-then-recreate the shot mask so the playblast always
+            # uses the freshest tab settings. Restore the prior camera
+            # binding after the blast so the user's manual binding (if
+            # any) survives.
+            prior_camera = ""
+            try:
+                if PBCPlayblastUtils.is_plugin_loaded():
+                    prior_mask = PBCShotMask.get_mask()
+                    if prior_mask and cmds.attributeQuery("camera", node=prior_mask, exists=True):
+                        prior_camera = cmds.getAttr("{0}.camera".format(prior_mask)) or ""
+            except Exception:
+                prior_camera = ""
 
-            self._playblast.execute(
-                output_dir=output_dir,
-                filename=filename,
-                padding=self.frame_padding_sb.value(),
-                overscan=self.overscan_cb.isChecked(),
-                show_ornaments=self.ornaments_cb.isChecked(),
-                show_in_viewer=self.viewer_cb.isChecked(),
-                offscreen=self.offscreen_cb.isChecked(),
-                overwrite=self.force_overwrite_cb.isChecked(),
-                camera_override=self._active_camera_override(),
-                enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
-                include_sound=self.sound_enable_cb.isChecked(),
-                scale_percent=self.scale_percent_sb.value(),
-                image_quality_override=self.image_quality_sb.value(),
-            )
+            self._prepare_shot_mask_for_playblast()
+
+            try:
+                self._playblast.execute(
+                    output_dir=output_dir,
+                    filename=filename,
+                    padding=self.frame_padding_sb.value(),
+                    overscan=self.overscan_cb.isChecked(),
+                    show_ornaments=self.ornaments_cb.isChecked(),
+                    show_in_viewer=self.viewer_cb.isChecked(),
+                    offscreen=self.offscreen_cb.isChecked(),
+                    overwrite=self.force_overwrite_cb.isChecked(),
+                    camera_override=self._active_camera_override(),
+                    enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+                    include_sound=self.sound_enable_cb.isChecked(),
+                    scale_percent=self.scale_percent_sb.value(),
+                    image_quality_override=self.image_quality_sb.value(),
+                )
+            finally:
+                if prior_camera and PBCShotMask.get_mask():
+                    PBCShotMask.set_camera(prior_camera)
         except Exception:
             traceback.print_exc()
             self.on_log_output("[Error] Playblast failed. See Script Editor for details.")
@@ -2948,24 +3018,39 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             codec = self.encoding_video_codec_cmb.currentData() or self.encoding_video_codec_cmb.currentText()
             self._playblast.set_encoding(container, codec)
 
-            # Pin the shot mask to the camera we're about to blast.
-            self._sync_shot_mask_to_camera(self._resolve_playblast_camera())
+            # See on_execute for the rationale: delete-and-recreate the
+            # shot mask, run the playblast unbound from any specific
+            # camera, then restore the prior binding.
+            prior_camera = ""
+            try:
+                if PBCPlayblastUtils.is_plugin_loaded():
+                    prior_mask = PBCShotMask.get_mask()
+                    if prior_mask and cmds.attributeQuery("camera", node=prior_mask, exists=True):
+                        prior_camera = cmds.getAttr("{0}.camera".format(prior_mask)) or ""
+            except Exception:
+                prior_camera = ""
 
-            self._playblast.execute(
-                output_dir=preview_dir,
-                filename=preview_name,
-                padding=self.frame_padding_sb.value(),
-                overscan=self.overscan_cb.isChecked(),
-                show_ornaments=self.ornaments_cb.isChecked(),
-                show_in_viewer=True,
-                offscreen=self.offscreen_cb.isChecked(),
-                overwrite=True,
-                camera_override=self._active_camera_override(),
-                enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
-                include_sound=self.sound_enable_cb.isChecked(),
-                scale_percent=self.scale_percent_sb.value(),
-                image_quality_override=self.image_quality_sb.value(),
-            )
+            self._prepare_shot_mask_for_playblast()
+
+            try:
+                self._playblast.execute(
+                    output_dir=preview_dir,
+                    filename=preview_name,
+                    padding=self.frame_padding_sb.value(),
+                    overscan=self.overscan_cb.isChecked(),
+                    show_ornaments=self.ornaments_cb.isChecked(),
+                    show_in_viewer=True,
+                    offscreen=self.offscreen_cb.isChecked(),
+                    overwrite=True,
+                    camera_override=self._active_camera_override(),
+                    enable_camera_frame_range=(self.frame_range_cmb.currentText() == "Camera"),
+                    include_sound=self.sound_enable_cb.isChecked(),
+                    scale_percent=self.scale_percent_sb.value(),
+                    image_quality_override=self.image_quality_sb.value(),
+                )
+            finally:
+                if prior_camera and PBCShotMask.get_mask():
+                    PBCShotMask.set_camera(prior_camera)
             self.on_log_output("Preview playblast created in temp folder: {0}".format(preview_dir))
         except Exception:
             traceback.print_exc()
@@ -3020,6 +3105,25 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         except Exception:
             traceback.print_exc()
 
+    def _push_shot_mask_attrs(self, mask):
+        """Write the shot mask tab's current label / border / counter
+        settings onto the supplied mask node.
+        """
+        attrs = [
+            ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
+            ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
+            ("topRightText", self.sm_top_right_le.text() if self.sm_top_right_cb.isChecked() else ""),
+            ("bottomLeftText", self.sm_bottom_left_le.text() if self.sm_bottom_left_cb.isChecked() else ""),
+            ("bottomCenterText", self.sm_bottom_center_le.text() if self.sm_bottom_center_cb.isChecked() else ""),
+            ("bottomRightText", self.sm_bottom_right_le.text() if self.sm_bottom_right_cb.isChecked() else ""),
+        ]
+        for attr, value in attrs:
+            cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
+
+        cmds.setAttr("{0}.topBorder".format(mask), self.sm_top_border_cb.isChecked())
+        cmds.setAttr("{0}.bottomBorder".format(mask), self.sm_bottom_border_cb.isChecked())
+        cmds.setAttr("{0}.counterPadding".format(mask), self.sm_counter_padding_sb.value())
+
     def apply_shot_mask_tab_settings(self):
         try:
             if not PBCPlayblastUtils.load_plugin():
@@ -3035,20 +3139,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                     "[Error] Unable to create PlayblastCreatorShotMask node."
                 )
                 return
-            attrs = [
-                ("topLeftText", self.sm_top_left_le.text() if self.sm_top_left_cb.isChecked() else ""),
-                ("topCenterText", self.sm_top_center_le.text() if self.sm_top_center_cb.isChecked() else ""),
-                ("topRightText", self.sm_top_right_le.text() if self.sm_top_right_cb.isChecked() else ""),
-                ("bottomLeftText", self.sm_bottom_left_le.text() if self.sm_bottom_left_cb.isChecked() else ""),
-                ("bottomCenterText", self.sm_bottom_center_le.text() if self.sm_bottom_center_cb.isChecked() else ""),
-                ("bottomRightText", self.sm_bottom_right_le.text() if self.sm_bottom_right_cb.isChecked() else ""),
-            ]
-            for attr, value in attrs:
-                cmds.setAttr("{0}.{1}".format(mask, attr), value, type="string")
 
-            cmds.setAttr("{0}.topBorder".format(mask), self.sm_top_border_cb.isChecked())
-            cmds.setAttr("{0}.bottomBorder".format(mask), self.sm_bottom_border_cb.isChecked())
-            cmds.setAttr("{0}.counterPadding".format(mask), self.sm_counter_padding_sb.value())
+            self._push_shot_mask_attrs(mask)
 
             self.shot_mask_cb.setChecked(self.sm_enable_mask_cb.isChecked())
 
@@ -3060,6 +3152,69 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         except Exception:
             traceback.print_exc()
             self.on_log_output("[Error] Failed to apply shot mask settings.")
+
+    def delete_shot_mask(self):
+        """Remove any PlayblastCreatorShotMask node from the scene."""
+        try:
+            if not PBCPlayblastUtils.load_plugin():
+                self.on_log_output(
+                    "[Error] Shot mask plug-in could not be loaded. "
+                    "Cannot delete shot mask."
+                )
+                return
+            mask = PBCShotMask.get_mask()
+            if not mask:
+                self.on_log_output("No shot mask exists in the scene.")
+                return
+            PBCShotMask.delete_mask()
+            self.on_log_output("Deleted shot mask from scene.")
+        except Exception:
+            traceback.print_exc()
+            self.on_log_output("[Error] Failed to delete shot mask.")
+
+    def _prepare_shot_mask_for_playblast(self):
+        """Delete-and-recreate the shot mask before a playblast so the
+        node always carries the latest tab settings, then unbind the
+        camera so the mask renders on whichever camera Maya's playblast
+        actually uses (matches the v1.4.2 pattern).
+
+        Returns the mask node name, or "" if the user has the shot mask
+        disabled or the plug-in could not be loaded.
+        """
+        if not self.shot_mask_cb.isChecked():
+            # User opted out for this playblast - make sure no stale
+            # mask draws over the output.
+            try:
+                if PBCPlayblastUtils.is_plugin_loaded():
+                    PBCShotMask.delete_mask()
+            except Exception:
+                pass
+            return ""
+
+        if not PBCPlayblastUtils.load_plugin():
+            self.on_log_output(
+                "[Warning] Shot mask plug-in not loaded; playblast will "
+                "render without the overlay."
+            )
+            return ""
+
+        # Always start from a clean node so changes made on the Shot
+        # Mask tab between playblasts are guaranteed to take effect.
+        PBCShotMask.delete_mask()
+        mask = PBCShotMask.create_mask()
+        if not mask:
+            self.on_log_output(
+                "[Error] Unable to create PlayblastCreatorShotMask node."
+            )
+            return ""
+
+        self._push_shot_mask_attrs(mask)
+        # Empty camera == "draw on every camera". This is what makes the
+        # overlay reliably appear in the playblast regardless of which
+        # camera Maya picks for the offscreen render pass.
+        PBCShotMask.set_camera("")
+        PBCShotMask.set_visible(True)
+        return mask
 
     def apply_tool_tab_settings(self):
         try:
@@ -3116,6 +3271,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.preview_btn.clicked.connect(self.on_preview)
         self.execute_btn.clicked.connect(self.on_execute)
         self.sm_apply_btn.clicked.connect(self.apply_shot_mask_tab_settings)
+        self.sm_delete_btn.clicked.connect(self.delete_shot_mask)
         self.sm_use_namegen_btn.clicked.connect(self.use_namegen_for_shotmask)
         self.sm_insert_item_btn.clicked.connect(self.insert_shotmask_token)
 
@@ -3582,6 +3738,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
         self.sm_use_namegen_btn = QtWidgets.QPushButton("Use Name Generator Preview")
         self.sm_apply_btn = QtWidgets.QPushButton("Apply Shot Mask Settings")
+        self.sm_delete_btn = QtWidgets.QPushButton("Delete Shot Mask")
 
     def _build_shot_mask_tab(self):
         enable_card, enable_body = self._card("Mask")
@@ -3627,6 +3784,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         tokens_body.addLayout(counter_row)
 
         apply_row = QtWidgets.QHBoxLayout()
+        apply_row.addWidget(self.sm_delete_btn)
         apply_row.addStretch()
         apply_row.addWidget(self.sm_use_namegen_btn)
         apply_row.addSpacing(6)
@@ -3980,6 +4138,11 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         )
         self.sm_apply_btn.setToolTip(
             "Push these settings onto the scene's shot-mask node."
+        )
+        self.sm_delete_btn.setToolTip(
+            "Remove the PlayblastCreatorShotMask node from the scene.\n"
+            "A fresh mask is rebuilt automatically the next time you "
+            "playblast or click Apply Shot Mask Settings."
         )
 
         # --- Settings tab ---------------------------------------------
