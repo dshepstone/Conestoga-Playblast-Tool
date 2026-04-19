@@ -2479,6 +2479,7 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.visibility_cmb = QtWidgets.QComboBox()
         self.visibility_cmb.setMinimumWidth(combo_box_min_width)
         self.visibility_cmb.addItems(self._playblast.viewport_visibility_preset_names)
+        self.visibility_cmb.addItem("Final Playblast")
         self.visibility_cmb.addItem("Custom")
         self.visibility_cmb.setCurrentText(PBCPlayblast.DEFAULT_VISIBILITY)
 
