@@ -3132,9 +3132,10 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
 
         if preset == "Final Playblast":
             viewport_data = list(self._playblast.get_viewport_visibility())
-            grid_idx = self._visibility_index("Grid")
-            if grid_idx >= 0 and grid_idx < len(viewport_data):
-                viewport_data[grid_idx] = False
+            for name in ("Grid", "Lights"):
+                idx = self._visibility_index(name)
+                if 0 <= idx < len(viewport_data):
+                    viewport_data[idx] = False
             self._playblast.set_visibility(viewport_data)
             return
 
