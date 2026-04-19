@@ -2505,10 +2505,10 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         self.fit_shot_mask_cb.setChecked(False)
 
         self.nurbs_curves_cb = QtWidgets.QCheckBox("NURBS Curves")
-        self.nurbs_curves_cb.setChecked(True)
+        self.nurbs_curves_cb.setChecked(False)
 
         self.nurbs_surfaces_cb = QtWidgets.QCheckBox("NURBS Surfaces")
-        self.nurbs_surfaces_cb.setChecked(True)
+        self.nurbs_surfaces_cb.setChecked(False)
 
         # --- Audio -----------------------------------------------------
         self.sound_enable_cb = QtWidgets.QCheckBox("Include Sound")
