@@ -3108,10 +3108,16 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         apply_quick_viewport_toggles so the NURBS override still
         wins over the preset's default.
 
-        "Viewport" -> mirror the active viewport (empty list tells
-        PBCPlayblast.get_visibility() to query modelEditor live).
-        "Custom"   -> whatever the Customize... dialog last saved.
-        Anything else -> resolve via preset_to_visibility().
+        "Viewport"        -> mirror the active viewport (empty list
+                             tells PBCPlayblast.get_visibility() to
+                             query modelEditor live).
+        "Final Playblast" -> live viewport snapshot with Grid forced
+                             off; the look overrides (smooth shaded,
+                             shadows, SSAO, motion blur, MSAA, gate
+                             off, etc.) are applied in _run_playblast.
+        "Custom"          -> whatever the Customize... dialog last
+                             saved.
+        Anything else     -> resolve via preset_to_visibility().
         """
         preset = self.visibility_cmb.currentText() if hasattr(self, "visibility_cmb") else ""
 
@@ -3122,6 +3128,14 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             else:
                 # No custom data saved yet - fall back to live viewport.
                 self._playblast.set_visibility([])
+            return
+
+        if preset == "Final Playblast":
+            viewport_data = list(self._playblast.get_viewport_visibility())
+            grid_idx = self._visibility_index("Grid")
+            if grid_idx >= 0 and grid_idx < len(viewport_data):
+                viewport_data[grid_idx] = False
+            self._playblast.set_visibility(viewport_data)
             return
 
         if preset == "Viewport" or not preset:
@@ -3135,6 +3149,123 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
             self._playblast.set_visibility([])
         else:
             self._playblast.set_visibility(data)
+
+    @staticmethod
+    def _visibility_index(name):
+        for i, item in enumerate(PBCPlayblast.VIEWPORT_VISIBILITY_LOOKUP):
+            if item[0] == name:
+                return i
+        return -1
+
+    # ------------------------------------------------------------------
+    # "Final Playblast" viewport-look overrides
+    # ------------------------------------------------------------------
+    FINAL_PLAYBLAST_HW_ATTRS = {
+        "hardwareRenderingGlobals.ssaoEnable": True,
+        "hardwareRenderingGlobals.motionBlurEnable": True,
+        "hardwareRenderingGlobals.multiSampleEnable": True,
+    }
+
+    FINAL_PLAYBLAST_MODEL_EDITOR = {
+        "displayAppearance": "smoothShaded",
+        "displayTextures": True,
+        "shadows": True,
+    }
+
+    FINAL_PLAYBLAST_CAMERA_ATTRS = {
+        "displayResolution": False,
+        "displayGateMask": False,
+        "displayFilmGate": False,
+    }
+
+    def _apply_final_playblast_look(self):
+        """Save-and-override the viewport, hardware renderer and
+        active camera so the playblast uses the "Final Playblast"
+        look (textured + smooth shaded + shadows + SSAO + motion
+        blur + MSAA, no gates, no grid).
+
+        Returns an opaque dict that _restore_final_playblast_look()
+        can use to put everything back.
+        """
+        originals = {
+            "hw": {},
+            "editor": {},
+            "editor_name": "",
+            "camera": {},
+            "camera_name": "",
+        }
+
+        # 1) Hardware rendering globals (scene-wide).
+        for attr_path, target in self.FINAL_PLAYBLAST_HW_ATTRS.items():
+            try:
+                originals["hw"][attr_path] = cmds.getAttr(attr_path)
+                cmds.setAttr(attr_path, target)
+            except Exception:
+                pass
+
+        # 2) Active viewport's model editor (textured, smooth shaded,
+        #    shadows). Use the same panel PBCPlayblast.execute will
+        #    pick so our overrides land on the right viewport.
+        try:
+            camera_hint = self._active_camera_override() or self._resolve_playblast_camera()
+            panel = self._playblast.get_viewport_panel(preferred_camera=camera_hint or None)
+            if panel:
+                model_editor = cmds.modelPanel(panel, q=True, modelEditor=True)
+                originals["editor_name"] = model_editor
+                for flag, target in self.FINAL_PLAYBLAST_MODEL_EDITOR.items():
+                    try:
+                        originals["editor"][flag] = cmds.modelEditor(
+                            model_editor, q=True, **{flag: True}
+                        )
+                        cmds.modelEditor(model_editor, e=True, **{flag: target})
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # 3) Camera shape (resolution gate / gate mask / film gate).
+        try:
+            cam = self._active_camera_override() or self._resolve_playblast_camera()
+            if cam:
+                shapes = cmds.listRelatives(cam, shapes=True, fullPath=True) or []
+                shape = shapes[0] if shapes else cam
+                originals["camera_name"] = shape
+                for attr_name, target in self.FINAL_PLAYBLAST_CAMERA_ATTRS.items():
+                    attr_path = "{0}.{1}".format(shape, attr_name)
+                    if cmds.attributeQuery(attr_name, node=shape, exists=True):
+                        try:
+                            originals["camera"][attr_name] = cmds.getAttr(attr_path)
+                            cmds.setAttr(attr_path, target)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        return originals
+
+    def _restore_final_playblast_look(self, originals):
+        if not originals:
+            return
+        for attr_path, value in originals.get("hw", {}).items():
+            try:
+                cmds.setAttr(attr_path, value)
+            except Exception:
+                pass
+        editor = originals.get("editor_name", "")
+        if editor:
+            for flag, value in originals.get("editor", {}).items():
+                try:
+                    cmds.modelEditor(editor, e=True, **{flag: value})
+                except Exception:
+                    pass
+        shape = originals.get("camera_name", "")
+        if shape:
+            for attr_name, value in originals.get("camera", {}).items():
+                attr_path = "{0}.{1}".format(shape, attr_name)
+                try:
+                    cmds.setAttr(attr_path, value)
+                except Exception:
+                    pass
 
     def apply_quick_viewport_toggles(self):
         # If the dropdown says "Viewport", get_visibility() returns
@@ -3366,6 +3497,17 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
         original_container = self._playblast.get_container_format()
         original_encoder = self._playblast.get_encoder()
 
+        # If the visibility dropdown is on "Final Playblast", push
+        # the textured/shaded/shadowed/SSAO/motion-blur/MSAA look
+        # onto the viewport + hw globals + active camera. Save the
+        # originals so we can revert cleanly in finally.
+        final_look_originals = None
+        if (
+            hasattr(self, "visibility_cmb")
+            and self.visibility_cmb.currentText() == "Final Playblast"
+        ):
+            final_look_originals = self._apply_final_playblast_look()
+
         try:
             if single_frame:
                 # Route the output through a single-image still so
@@ -3389,6 +3531,8 @@ class PBCPlayblastWidget(QtWidgets.QWidget):
                 image_quality_override=self.image_quality_sb.value(),
             )
         finally:
+            if final_look_originals is not None:
+                self._restore_final_playblast_look(final_look_originals)
             if single_frame:
                 # Restore the user's chosen encoding so the next
                 # Create Playblast is not affected by the preview.
